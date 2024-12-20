@@ -1,25 +1,43 @@
 class Vertex:
-    def __init__(self, x, y):
+    def __init__(self, x, y, id = None):
         self.x = x  # Współrzędna x wierzchołka
         self.y = y  # Współrzędna y wierzchołka
+        self.id = id
         self.outgoingEdge = None  # Wskaźnik na jedną z wychodzących krawędzi (HalfEdge)
-
+        self.type = None #typ punktu (terminal itd.)
     def __repr__(self):
         return f"Vertex({self.x}, {self.y})"
 
 
 class HalfEdge:
+    currY = -1
     def __init__(self):
         self.origin = None  # Wskaźnik na początkowy wierzchołek (Vertex)
         self.twin = None  # Wskaźnik na drugą połowę tej samej krawędzi (HalfEdge)
         self.next = None  # Wskaźnik na następną krawędź w tej samej ścianie (HalfEdge)
         self.prev = None  # Wskaźnik na poprzednią krawędź w tej samej ścianie (HalfEdge)
         self.face = None  # Wskaźnik na ścianę, do której należy krawędź (Face)
-
+        self.k = None #x = ky + l
+        self.l = None
+        self.helper = None
+        # self.verticeX =
+    def currX(self):
+        # if verticeX is not None:
+        #     return verticeX
+        # else:
+        return self.k * HalfEdge.currY + self.l 
+    
     def __repr__(self):
         return f"HalfEdge(origin={self.origin})"
 
+    def __eq__(self, other):
+        if not isinstance(other, HalfEdge):
+            return False
+        return self.origin.id == other.origin.id and self.k == other.k and self.l == other.l and self.twin.origin == other.twin.origin
 
+    def __hash__(self):
+        return hash((self.origin.id))
+        
 class Face:
     def __init__(self):
         self.outerEdge = None  # Wskaźnik na jedną z otaczających krawędzi (HalfEdge)
@@ -76,12 +94,43 @@ class HalfEdgeMesh:
             edge.face = face
             edge.next = edgeCycle[(i + 1) % len(edgeCycle)]  # Następna krawędź w cyklu
             edge.prev = edgeCycle[(i - 1) % len(edgeCycle)]  # Poprzednia krawędź w cyklu
-
+            print(edge.prev, edge, edge.next)
         # Powiązanie ściany z jedną z jej krawędzi
         face.outerEdge = edgeCycle[0]
 
         return face
 
+    def addDiagDiv(self, v1, v2):
+        '''
+        Dodaje przekątną między punktami, rozdziela face na dwie nowe ściany.
+        Lemat: Zanim dwa wierzchołki się połączą, mają maksymalnie jedną wspólną ścianę. 
+        NIE MODYFIKUJE FACES, bo zlozoność bylaby liniowa
+        modyfikuje tylko krawedzie w sumie, da sie przeiterowac po wszystkich krawedziach majac tylko to (i chyba 
+        oznaczyc sciany tez)
+        '''
+        v1PrevEdge = v1.outgoingEdge.prev
+        v1NextEdge = v1.outgoingEdge
+        v2PrevEdge = v2.outgoingEdge.prev
+        v2NextEdge = v2.outgoingEdge
+        
+        new, newTwin = self.addEdge(v1,v2)
+        new.k = (new.origin.x - new.twin.origin.x)/(new.origin.y - new.twin.origin.y)
+        new.l = new.origin.x - new.k*new.origin.y
+        newTwin.k, newTwin.l = new.k, new.l
+        new.prev = v1PrevEdge
+        new.next = v2NextEdge
+        newTwin.prev = v2PrevEdge
+        newTwin.next = v1NextEdge
+
+        v1PrevEdge.next = new
+        v2NextEdge.prev = new
+
+        v1NextEdge.prev = newTwin
+        v2PrevEdge.next = newTwin
+
+        # v1.outgoingEdge = new #aktualizujemy tez dla wierzcholkow krawedzei wychodzace
+        # v2.outgoingEdge = newTwin
+        return new
     def __repr__(self):
         return f"HalfEdgeMesh(vertices={len(self.vertices)}, edges={len(self.edges)}, faces={len(self.faces)})"
 

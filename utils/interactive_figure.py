@@ -4,6 +4,7 @@ import json
 import time
 from pathlib import Path
 
+
 def export_json(points, edges): 
     data_dir = Path(__file__).parent.parent / "data"
     path_to_json  = data_dir / "exportData.json" #tworzy ścieżkę do jsona pobierając ścieżkę do tego pliku
