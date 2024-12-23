@@ -131,6 +131,17 @@ class HalfEdgeMesh:
         # v1.outgoingEdge = new #aktualizujemy tez dla wierzcholkow krawedzei wychodzace
         # v2.outgoingEdge = newTwin
         return new
+    
+    def extractFaceVertices(self, face):
+        vertices = []
+        start = face.outerEdge
+        vertices.append(start.origin)
+        p = start.next
+        while p != start:
+            vertices.append(p.origin)
+            p = p.next
+        return vertices
+        
     def __repr__(self):
         return f"HalfEdgeMesh(vertices={len(self.vertices)}, edges={len(self.edges)}, faces={len(self.faces)})"
 
