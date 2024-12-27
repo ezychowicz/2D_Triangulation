@@ -2,7 +2,7 @@ from pathlib import Path
 from utils.halfedge import HalfEdge, HalfEdgeMesh, Vertex, Face
 from utils import interactive_figure
 
-from sortedcontainers import SortedSet # type: ignore
+from sortedcontainers import SortedSet 
 from functools import cmp_to_key
 import matplotlib.pyplot as plt
 import json
@@ -10,11 +10,14 @@ import json
 savefig = False
 EPS = 10**(-10)
 
+def det_sarrus(A, B, C):
+    return A.x*B.y + A.y*C.x + B.x*C.y - C.x*B.y - B.x*A.y - A.x*C.y
+
 def loadFigure(dataName = "exportData.json"):
     '''
     Wczytuje określony wielokąt json w folderze "data". 
     '''
-    pathToJson = Path(__file__).parent.parent / "data" /dataName
+    pathToJson = Path(__file__).parent / "data" /dataName
     with open(pathToJson,"r") as jsonFile:
         figure = json.load(jsonFile)
     return figure
@@ -95,7 +98,7 @@ class Classification:
         return A.x*B.y + A.y*C.x + B.x*C.y - C.x*B.y - B.x*A.y - A.x*C.y
 
     def orient(self, A, B, C):
-        det = self.det_sarrus(A, B, C) 
+        det = det_sarrus(A, B, C) 
         if det >= self.eps:
             return -1 #C na lewo od AB 
         elif det <= -self.eps:
@@ -214,7 +217,7 @@ class Division:
     def handleRegularVertex(self, v):
         if v.type == 'RL': #intP po prawej    
             prevEdge = v.outgoingEdge.prev
-            if prevEdge.helper.type == 'M':
+            if prevEdge.helper is not None and prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge zostal zakryty przekatna
                 self.addedDiags.add(self.polygon.addDiagDiv(v, prevEdge.helper))
             self.T.discard(prevEdge)
             v.outgoingEdge.helper = v
@@ -283,19 +286,6 @@ class Division:
         self.updateFaces()
         return self.polygon
 
-
-    # def convertToEdgeSet(self):
-    #     # visited = dict()
-    #     edges = set()
-    #     for face in self.polygon.faces:
-    #         start = face.outerEdge
-    #         p = p.next
-    #         edges.add(start)
-    #         while p != start:
-    #             edges.add(p)
-    #             p = p.next  
-    #     return edges
-
     def visualize(self):
         fig, ax = plt.subplots()
         xlim = (0,10)
@@ -312,6 +302,140 @@ class Division:
         plt.show()
 
 
+
+class Triangulation:
+    '''
+    Klasa z algorytmami używanymi do triangulacji. Przyjmuje informacje o wielokącie i określoną tolerancję na zero. Zawiera: algorytm z wykładu (algorithm), funkcje animującą (algoAnimation),
+    algorytm z wykładu, ale dodający przekątne zamiast trójkątów (algorithmDiag), wizualizacje wyniku algorithmDiag (VisualizeAlgoDiag) i wizualizacje wyniku algorithm (rysuje trójkąty triangulacji) (VisualizeResult)
+    Pozostałe funkcje są pomocnicze.
+    '''
+
+    def __init__(self, mesh, currFace, eps = 10**(-12)):
+        self.mesh = mesh
+        self.eps = eps
+        self.currFace = currFace
+        self.vertices = self.mesh.extractFaceVertices(currFace)
+        self.left = [True]*(len(self.vertices))
+    def branches(self): 
+        '''
+        Dzieli na lewą i prawą gałąź - do prawej należy najniższy punkt, do lewej najwyższy.
+        '''
+        initialPointIdx, maxi = -1, -float('inf')
+        endPointIdx, mini = -1, float('inf')
+        for i, vert in enumerate(self.vertices):
+            if maxi < vert.y:
+                maxi = vert.y
+                initialPointIdx = i
+            if mini > vert.y:
+                mini = vert.y
+                endPointIdx = i
+        i = endPointIdx
+        while i != initialPointIdx:
+            self.left[i] = False
+            i = (i + 1) % len(self.vertices)
+    
+    def orient(self, A, B, C):
+        det = det_sarrus(A, B, C) 
+        if det >= self.eps:
+            return -1 #C na lewo od AB 
+        elif det <= -self.eps:
+            return 1 #C na prawo od AB
+        return 0 #współliniowe
+
+
+    def inside(self, idx1, idx2, idx3): 
+        '''
+        Sprawdza czy trójkąt stworzony z punktów o indeksach idx1, idx2, idx3 jest w środku wielokąta. Najpierw ustawia punkty w kolejności ccw, potem oblicza ich wyznacznik. Gdy wyznacznik > eps: kąt wew. tworzony 
+        przez te 3 punkty jest < pi => trójkąt należy do wielokąta.
+        '''
+        order = sorted([idx1,idx2,idx3]) #posortuj po wystepowaniu w self.points: czyli ccw
+        A, B, C = self.vertices[order[0]], self.vertices[order[1]], self.vertices[order[2]]
+        det = det_sarrus(A, B, C)
+        return det >= self.eps
+
+    def mergeBranches(self):
+        leftIdxs = []
+        rightIdxs = []
+        for i in range (len(self.left)):
+            if self.left[i]:
+                leftIdxs.append(i)
+            else:
+                rightIdxs.append(i)
+        idxs = [None]*(len(self.left))
+        l,r = 0, len(rightIdxs) - 1
+        for i in range (len(idxs)):
+            if self.vertices[leftIdxs[l]].y >= self.vertices[rightIdxs[r]].y:
+                idxs[i] = leftIdxs[l]
+                l += 1
+                if l == len(leftIdxs):
+                    idxs[i + 1:] = rightIdxs[r::-1]
+                    break
+            else:
+                idxs[i] = rightIdxs[r]
+                r -= 1
+                if r == -1:
+                    idxs[i + 1:] = leftIdxs[l:]
+                    break
+        return idxs
+    def updateMesh(self, idx1, idx2): #dodaje przekatna i aktualizuje faces
+        if idx1 > idx2: #chcemy posortowane bo indeksy sa ccw, a dodajac przekatna chcemy to zrobic w dobrym kierunku
+            idx1, idx2 = idx2, idx1
+        self.mesh.addDiagDiv(self.vertices[idx1], self.vertices[idx2])
+        newFace1 = Face()
+        diag = self.vertices[idx1].outgoingEdge
+        newFace1.outerEdge = diag 
+        newFace2 = Face() 
+        diagTwin = self.vertices[idx2].outgoingEdge
+        newFace2.outerEdge = diagTwin
+        for i in range (3):
+            diag.face = newFace1
+            diag = diag.next
+
+            diagTwin.face = newFace2
+            diagTwin = diagTwin.next
+        
+    def algorithm(self):
+        '''
+        GŁÓWNY ALGORYTM TRIANGULACJI. Tworzy trójkąty i zapisuje je do listy w kolejności ccw.
+        '''
+        N = len(self.vertices)
+        self.branches()
+        idxs = self.mergeBranches() #posortowana wzgledem y lista indeksów
+        
+        stack = [idxs[0], idxs[1]]
+        for idx in range (2, N):
+            if self.left[idxs[idx]] != self.left[stack[-1]]: #jeśli łańcuchy różne
+                first = stack.pop()
+                u = stack.pop()
+                if abs(idxs[idx] - first) != N - 1 and abs(idxs[idx] - first) != 1:
+                    # self.diag.append((idxs[idx], first))
+                    self.updateMesh(idxs[idx], first)
+                while stack:
+                    u,v = stack.pop(), u
+                    if abs(idxs[idx] - v) != N - 1 and abs(idxs[idx] - v) != 1:  #żeby nie dodawał gdy to jest bok
+                        # self.diag.append((idxs[idx], v))
+                        self.updateMesh(idxs[idx], v)
+                stack.append(first)
+                stack.append(idxs[idx])
+            else:
+                flag = False
+                v = stack.pop() 
+                u = stack.pop() 
+                while self.inside(idxs[idx], v, u): 
+                    if abs(idxs[idx] - u) != N - 1 and abs(idxs[idx] - u) != 1:
+                        # self.diag.append((idxs[idx], u))
+                        self.updateMesh(idxs[idx], u)
+                    if not stack: #jesli skonczyl sie stack to nic nadmiarowego nie usunelismy
+                        flag = True
+                        break
+                    u, v = stack.pop(), u 
+
+                stack.append(u) 
+                if not flag: 
+                    stack.append(v) 
+                stack.append(idxs[idx])
+    
+
 if __name__ == "__main__":
     figure = loadFigure()
     points = figure["points"]
@@ -323,3 +447,13 @@ if __name__ == "__main__":
     division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
     division.divide()
     division.visualize()
+    facesIdxToRemove = set()
+    for i, face in enumerate(division.polygon.faces):
+        trian = Triangulation(division.polygon, currFace=face)
+        if len(trian.vertices) == 3:
+            continue
+        else:
+            trian.algorithm()
+            facesIdxToRemove.add(i)
+    division.polygon.faces = list(filter(lambda faceIdx: faceIdx not in facesIdxToRemove, division.polygon.faces))
+    
