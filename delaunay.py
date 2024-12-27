@@ -1,4 +1,5 @@
 import random
+import math
 import matplotlib.pyplot as plt
 from collections import deque
 
@@ -6,11 +7,11 @@ from collections import deque
 
 
 # TODO
-# - add on edge thing
-# - add find intersecting
-# - add flip to constrain thing
-# - add fix delaunay thing
 # - refactor a bit?
+# - test on artem-ogre tests
+# literka a (odwrotna)
+# gitara
+# cdt
 
 class Vector:
   def __init__(self, x, y):
@@ -28,9 +29,19 @@ def sgn(value):
   else:
     return 0
 
+def orientationDet(v1, v2, v3):
+  return (v2.x - v1.x) * (v3.y - v1.y) - (v2.y - v1.y) * (v3.x - v1.x)
+
 def orientation(v1, v2, v3):
-  det = (v2.x - v1.x) * (v3.y - v1.y) - (v2.y - v1.y) * (v3.x - v1.x)
+  det = orientationDet(v1, v2, v3)
   return -sgn(det)
+
+def onsegment(a, b, p, Eps):
+  det = orientationDet(a, b, p)
+  if abs(det) > Eps:
+    return False
+
+  return p.x >= min(a.x, b.x) and p.x <= max(a.x, b.x) and p.y >= min(a.y, b.y) and p.y <= max(a.y, b.y)
 
 def circleTest(a, b, c, p):
   import numpy as np
@@ -41,6 +52,9 @@ def circleTest(a, b, c, p):
       [c.x, c.y, c.x**2 + c.y**2, 1],
       [p.x, p.y, p.x**2 + p.y**2, 1],
   ])
+
+  # if abs(np.linalg.det(matrix)) < 0.00001:
+  #   return 0
 
   return sgn(np.linalg.det(matrix))
 
@@ -68,17 +82,12 @@ class Face:
   def contains(self, point, vertices):
     return orientation(vertices[self.vertex1], vertices[self.vertex2], point) <= 0 and orientation(vertices[self.vertex2], vertices[self.vertex3], point) <= 0 and orientation(vertices[self.vertex3], vertices[self.vertex1], point) <= 0
 
-cid = 0
-
 class HalfEdge:
   def __init__(self, twin, next, vertex, face = None):
     self.twin = twin
     self.next = next
     self.vertex = vertex
     self.face = face
-    global cid
-    self.id = cid
-    cid += 1
 
   def flip(self):
     prev1 = self.next.next
@@ -98,7 +107,7 @@ class HalfEdge:
 
     return newEdge1
 
-  def splitInside(self, newVertex):
+  def splitFace(self, newVertex):
     e1 = self
     e2 = e1.next
     e3 = e2.next
@@ -129,17 +138,80 @@ class HalfEdge:
 
     return (e1, e2, e3)
 
+  def splitEdge(self, newVertex):
+    e = self
+    e1 = e.next
+    e2 = e1.next
+    e3 = e.twin.next
+    e4 = e3.next
+
+    b2 = HalfEdge(None, e2, newVertex)
+    a2 = HalfEdge(None, b2, e.vertex)
+
+    b4 = HalfEdge(None, e4, newVertex)
+    a4 = HalfEdge(None, b4, e.twin.vertex)
+
+    a1 = HalfEdge(None, e1, newVertex)
+    b1 = HalfEdge(None, a1, e2.vertex)
+
+    a3 = HalfEdge(None, e3, newVertex)
+    b3 = HalfEdge(None, a3, e4.vertex)
+
+    b1.twin = b2
+    b2.twin = b1
+
+    b4.twin = b3
+    b3.twin = b4
+
+    a1.twin = a4
+    a4.twin = a1
+
+    a2.twin = a3
+    a3.twin = a2
+
+    e4.next = a4
+    e1.next = b1
+    e2.next = a2
+    e3.next = b3
+
+    return (e1, e2, e3, e4)
+
+
+def getBoundingTriangle(points):
+  minx = points[0].x
+  maxx = points[0].x
+  miny = points[0].x
+  maxy = points[0].x
+  for p in points:
+    minx = min(minx, p.x)
+    maxx = max(maxx, p.x)
+    miny = min(miny, p.y)
+    maxy = max(maxy, p.y)
+
+  cx = (minx + maxx) / 2
+  cy = (miny + maxy) / 2
+  w = maxx - minx
+  h = maxy - miny
+  a = (math.sqrt(3) * 2 / 3) * h + w
+
+  pad = a * 0.1 + 1
+
+  return Vector(cx - a / 2 - pad, miny - pad), Vector(cx + a / 2 + pad, miny - pad), Vector(cx, miny + a * math.sqrt(3) / 2 + pad)
+
 class Mesh:
 
   def __init__(self, vertices):
+    self.OnSegmentEpsilon = 10**-6
+
     self.vertices = vertices
     self.faces = []
     self.edgeExists = set()
     self.verticesEdges = []
 
-    vertices.append(Vector(-1000, -1000))
-    vertices.append(Vector(1000, -1000))
-    vertices.append(Vector(0, 1000))
+    p1, p2, p3 = getBoundingTriangle(vertices)
+    vertices.append(p1)
+    vertices.append(p2)
+    vertices.append(p3)
 
     e3 = HalfEdge(None, None, len(vertices) - 1, 0)
     e2 = HalfEdge(None, e3, len(vertices) - 2, 0)
@@ -153,16 +225,16 @@ class Mesh:
     self.faces.append(Face(e1))
     self.root = 0
 
+    self.constrained = set()
+
   def normalizedEdgeForSet(self, edge):
     return ( min(edge.vertex, edge.next.vertex), max(edge.vertex, edge.next.vertex) )
 
   def removeEdgeFromSet(self, edge):
-    print(f'remove {(edge.vertex, edge.next.vertex)}')
     self.edgeExists.remove((edge.vertex, edge.next.vertex))
     self.verticesEdges[edge.vertex].remove(edge)
 
   def addEdgeToSet(self, edge):
-    print(f'add {(edge.vertex, edge.next.vertex)}')
     self.edgeExists.add((edge.vertex, edge.next.vertex))
     while len(self.verticesEdges) <= edge.vertex:
       self.verticesEdges.append(set())
@@ -203,7 +275,7 @@ class Mesh:
     return newEdge
 
   def isEdgeLegal(self, edge):
-    return circleTest(self.vertices[edge.vertex], self.vertices[edge.next.vertex], self.vertices[edge.next.next.vertex], self.vertices[edge.twin.next.next.vertex]) < 0
+    return circleTest(self.vertices[edge.vertex], self.vertices[edge.next.vertex], self.vertices[edge.next.next.vertex], self.vertices[edge.twin.next.next.vertex]) <= 0
 
   def legalizeEdge(self, edge):
     if not self.isEdgeLegal(edge):
@@ -217,8 +289,59 @@ class Mesh:
       if e2.twin:
         self.legalizeEdge(e2.twin)
 
+  def addVertexToEdgeAndLegalize(self, edge, vertexIndex):
+    face1 = edge.face
+    face2 = edge.twin.face
+
+    e1, e2, e3, e4 = edge.splitEdge(vertexIndex)
+
+    self.addEdgeToSet(e1.next)
+    self.addEdgeToSet(e1.next.next)
+    self.addEdgeToSet(e2.next)
+    self.addEdgeToSet(e2.next.next)
+    self.addEdgeToSet(e3.next)
+    self.addEdgeToSet(e3.next.next)
+    self.addEdgeToSet(e4.next)
+    self.addEdgeToSet(e4.next.next)
+
+    self.faces.append(Face(e1))
+    self.faces.append(Face(e2))
+    self.faces.append(Face(e3))
+    self.faces.append(Face(e4))
+
+    e1.face = len(self.faces) - 4
+    e1.next.face = len(self.faces) - 4
+    e1.next.next.face = len(self.faces) - 4
+
+    e2.face = len(self.faces) - 3
+    e2.next.face = len(self.faces) - 3
+    e2.next.next.face = len(self.faces) - 3
+
+    e3.face = len(self.faces) - 2
+    e3.next.face = len(self.faces) - 2
+    e3.next.next.face = len(self.faces) - 2
+
+    e4.face = len(self.faces) - 1
+    e4.next.face = len(self.faces) - 1
+    e4.next.next.face = len(self.faces) - 1
+
+    self.faces[face1].children.append(len(self.faces) - 4)
+    self.faces[face1].children.append(len(self.faces) - 3)
+
+    self.faces[face2].children.append(len(self.faces) - 2)
+    self.faces[face2].children.append(len(self.faces) - 1)
+
+    if e1.twin:
+      self.legalizeEdge(e1.twin)
+    if e2.twin:
+      self.legalizeEdge(e2.twin)
+    if e3.twin:
+      self.legalizeEdge(e3.twin)
+    if e4.twin:
+      self.legalizeEdge(e4.twin)
+
   def addVertexToFaceAndLegalize(self, face, vertexIndex):
-    e1, e2, e3 = self.faces[face].edge.splitInside(vertexIndex)
+    e1, e2, e3 = self.faces[face].edge.splitFace(vertexIndex)
 
     self.addEdgeToSet(e1.next)
     self.addEdgeToSet(e1.next.next)
@@ -254,6 +377,18 @@ class Mesh:
     if e3.twin:
       self.legalizeEdge(e3.twin)
 
+  def addVertexAndLegalize(self, face, vertexIndex):
+    edge = self.faces[face].edge
+    if onsegment(self.vertices[edge.vertex], self.vertices[edge.next.vertex], self.vertices[vertexIndex], self.OnSegmentEpsilon):
+      self.addVertexToEdgeAndLegalize(edge, vertexIndex)
+    elif onsegment(self.vertices[edge.next.vertex], self.vertices[edge.next.next.vertex], self.vertices[vertexIndex], self.OnSegmentEpsilon):
+      self.addVertexToEdgeAndLegalize(edge.next, vertexIndex)
+    elif onsegment(self.vertices[edge.next.next.vertex], self.vertices[edge.vertex], self.vertices[vertexIndex], self.OnSegmentEpsilon):
+      self.addVertexToEdgeAndLegalize(edge.next.next, vertexIndex)
+    else:
+      self.addVertexToFaceAndLegalize(face, vertexIndex)
+
+
   def contains(self, face, vertex):
     return self.faces[face].contains(vertex, self.vertices)
 
@@ -271,7 +406,6 @@ class Mesh:
           break
       if next == None:
         assert(False)
-        return None
       face = next
 
     return face
@@ -305,6 +439,7 @@ class Mesh:
     return ans
 
   def constrainEdge(self, index1, index2):
+    self.constrained.add((index1, index2))
     index1, index2 = (min(index1, index2), max(index1, index2))
     if self.edgeAlreadyInTriangulation(index1, index2):
       return
@@ -337,7 +472,36 @@ class Mesh:
           newEdges[i] = self.flipEdge(newEdges[i])
           done = False
 
-  def toTriangleList(self, filterSuperTriangle):
+  def findInner(self):
+    queue = deque()
+    visited = [False] * len(self.faces)
+
+    l = list(self.constrained)
+
+    for i1, i2 in self.constrained:
+      for e in self.verticesEdges[i1]:
+        if e.next.vertex == i2:
+          queue.append(e.face)
+          visited[e.face] = True
+          break
+
+    # return visited
+
+    while queue:
+      face = queue.popleft()
+      visited[face] = True
+
+      edges = [self.faces[face].edge, self.faces[face].edge.next, self.faces[face].edge.next.next]
+
+      for e in edges:
+        if (e.vertex, e.next.vertex) not in self.constrained and e.twin and not visited[e.twin.face]:
+          queue.append(e.twin.face)
+
+
+    return visited
+
+
+  def toTriangleList(self, filterSuperTriangle, removeOuter = False):
     ans = []
 
     queue = []
@@ -347,18 +511,14 @@ class Mesh:
 
     visited = [False] * len(self.faces)
 
-    while l < len(queue):
-      face = queue[l]
-      l += 1
-      visited[face] = True
+    inside = self.findInner()
 
+    for face in range(len(self.faces)):
       if len(self.faces[face].children) == 0:
-        if not filterSuperTriangle or not ( len( [v for v in [self.faces[face].vertex1, self.faces[face].vertex2, self.faces[face].vertex3] if v in [len(points) - 1, len(points) - 2, len(points) - 3]]) > 0 ):
+        superTriangleFilter = not filterSuperTriangle or not ( len( [v for v in [self.faces[face].vertex1, self.faces[face].vertex2, self.faces[face].vertex3] if v in [len(self.vertices) - 1, len(self.vertices) - 2, len(self.vertices) - 3]]) > 0 )
+        outerFilter = not removeOuter or inside[face]
+        if superTriangleFilter and outerFilter:
           ans.append((self.faces[face].vertex1, self.faces[face].vertex2, self.faces[face].vertex3))
-
-      for child in self.faces[face].children:
-        if not visited[child]:
-          queue.append(child)
 
     return ans
 
@@ -369,7 +529,7 @@ def delaunayNaive(points):
     for face in range(len(mesh.faces)):
       if len(mesh.faces[face].children) == 0:
         if mesh.contains(face, points[p]):
-          mesh.addVertexToFaceAndLegalize(face, p)
+          mesh.addVertexAndLegalize(face, p)
 
   return mesh.toTriangleList(False)
 
@@ -385,21 +545,20 @@ def delaunay(points, constrains = []):
     if (p.x, p.y) not in already:
       already.add((p.x, p.y))
       face = mesh.locate(p)
-      mesh.addVertexToFaceAndLegalize(face, i)
+      mesh.addVertexAndLegalize(face, i)
 
   for (i1, i2) in constrains:
     mesh.constrainEdge(i1, i2)
 
-  return mesh.toTriangleList(True)
+  return mesh.toTriangleList(True, len(constrains) > 0)
 
 def triangulatePolygon(points):
   constrains = [ (i, (i + 1) % len(points)) for i in range(len(points))]
-  constrains = []
+  #constrains = []
   triangulation = delaunay(points, constrains)
   ans = []
   for (i1, i2, i3) in triangulation:
-    if (i1 < i2 and (i3 < i1 or i3 > i2)) or (i1 > i2 and (i3 > i2 and i3 < i1)):    
-      ans.append((i1, i2, i3))
+    ans.append((i1, i2, i3))
   return ans
 
 def textScatter(xs, ys, **kwargs):
@@ -408,7 +567,7 @@ def textScatter(xs, ys, **kwargs):
 
   # Add numbering to each point
   for i, (xi, yi) in enumerate(zip(xs, ys)):
-      plt.text(xi, yi, str(i), fontsize=12, ha='right', va='bottom')
+    plt.text(xi, yi, str(i), fontsize=12, ha='right', va='bottom')
 
   return scatter
 
@@ -431,16 +590,16 @@ def interactive():
         mesh.vertices.append(Vector(event.xdata, event.ydata))
         l = mesh.locate(Vector(event.xdata, event.ydata))
         if l != None:
-          mesh.addVertexToFaceAndLegalize(l, len(mesh.vertices) - 1)
+          mesh.addVertexAndLegalize(l, len(mesh.vertices) - 1)
 
   def onmoved(event):
     nonlocal mesh
     #plt.scatter([p.x for p in mesh.vertices], [p.y for p in mesh.vertices], color = 'orange')
 
-    print(mesh.vertices)    
+    #print(mesh.vertices)
     plt.clf()
     textScatter([p.x for p in mesh.vertices], [p.y for p in mesh.vertices], color = 'orange')
-    t = mesh.toTriangleList(True)
+    t = mesh.toTriangleList(False)
 
     for (i1, i2, i3) in t:
       txs = [ mesh.vertices[i].x for i in [i1, i2, i3, i1] ]
@@ -495,17 +654,78 @@ def testForCrash():
     #except Exception as e:
     #print("HAHA")
 
-if __name__ == "__main__":
-  # testForCrash()
-  # interactive()
-  # quit(0)
-  points = [Vector(-42.31, 17.54), Vector(-277.81, -231.21), Vector(-295.61, -797.51), Vector(403.87, -824.06), Vector(673.50, -633.73), Vector(372.49, -128.59), Vector(137.48, -372.77)]
-  
+def genRandomOnCircle(n, radius):
+  angles = [random.random() * 2 * math.pi for _ in range(n)]
+  angles.sort()
+  xs = [ math.cos(angles[i]) * radius for i in range(n) ]
+  ys = [ math.sin(angles[i]) * radius for i in range(n) ]
+  return xs, ys
 
-  t = triangulatePolygon(points)
+def ogreTest():
+  n, m = input().split()
+  n = int(n)
+  m = int(m)
+
+  points = []
+  for i in range(n):
+    x, y = input().split()
+    x = float(x)
+    y = float(y)
+    points.append(Vector(x, y))
+
+  constrains = []
+  for i in range(m):
+    a, b = input().split()
+    a = int(a)
+    b = int(b)
+    #constrains.append((a, b))
+    constrains.append((b, a))
+
+  t = delaunay(points, constrains)
+
   xs = [ p.x for p in points ]
   ys = [ p.y for p in points ]
   plt.scatter(xs, ys)
+  print(len(t))
+  for (i1, i2, i3) in t:
+    txs = [ xs[i1], xs[i2], xs[i3], xs[i1] ]
+    tys = [ ys[i1], ys[i2], ys[i3], ys[i1] ]
+    plt.plot(txs, tys)
+
+  for (i1, i2) in constrains:
+    txs = [ xs[i1], xs[i2] ]
+    tys = [ ys[i1], ys[i2] ]
+    plt.plot(txs, tys, color = 'black')
+  plt.show()
+
+if __name__ == "__main__":
+  ogreTest()
+  quit(0)
+  #testForCrash()
+  #interactive()
+  #quit(0)
+  #points = [Vector(-42.31, 17.54), Vector(-277.81, -231.21), Vector(-295.61, -797.51), Vector(403.87, -824.06), Vector(673.50, -633.73), Vector(372.49, -128.59), Vector(137.48, -372.77)]
+  n = int(input())
+  points = []
+  for i in range(n):
+    x, y = input().split()
+    x = float(x)
+    y = float(y)
+    points.append(Vector(x, y))
+  #points = list(reversed(points))
+  # xs, ys = genRandomOnCircle(10000, 10)
+  # points = [ Vector(xs[i], ys[i]) for i in range(len(xs))]
+  t = triangulatePolygon(points)
+  #t = delaunay(points)
+  # points.pop()
+  # points.pop()
+  # points.pop()
+  xs = [ p.x for p in points ]
+  ys = [ p.y for p in points ]
+  textScatter(xs, ys)
+  plt.show()
+  plt.scatter(xs, ys)
+  print(len(t))
   for (i1, i2, i3) in t:
     txs = [ xs[i1], xs[i2], xs[i3], xs[i1] ]
     tys = [ ys[i1], ys[i2], ys[i3], ys[i1] ]
