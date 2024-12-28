@@ -6,6 +6,7 @@ from sortedcontainers import SortedSet
 from functools import cmp_to_key
 import matplotlib.pyplot as plt
 import json
+import ctypes
 #na razie zakladam ze nie bedzie punktow o rownych y, trzeba bedzie te jakies rotacje dorobic
 savefig = False
 EPS = 10**(-10)
@@ -36,6 +37,8 @@ class Structures:
         N = len(self.points) 
         for i in range (N - 1):
             e1, e2 = mesh.addEdge(self.points[i], self.points[i + 1])
+            self.points[i].outgoingEdge = e1
+            self.points[i + 1].outgoingEdge = e2
             ccwFace.append(e1)
         #edge case dla ostatniej krawedzi:       
         edge1, edge2 = HalfEdge(), HalfEdge()
@@ -53,9 +56,12 @@ class Structures:
                 if edge.origin.x < edge.twin.origin.x:
                     edge.k = (edge.origin.x - edge.twin.origin.x)/((edge.origin.y + EPS) - edge.twin.origin.y)
                     edge.l = edge.origin.x - edge.k*(edge.origin.y + EPS)
-                
-            edge.k = (edge.origin.x - edge.twin.origin.x)/(edge.origin.y - edge.twin.origin.y)
-            edge.l = edge.origin.x - edge.k*edge.origin.y
+                else:
+                    edge.k = (edge.twin.origin.x - edge.origin.x)/((edge.twin.origin.y + EPS) - edge.origin.y)
+                    edge.l = edge.twin.origin.x - edge.k*(edge.twin.origin.y + EPS) 
+            else:
+                edge.k = (edge.origin.x - edge.twin.origin.x)/(edge.origin.y - edge.twin.origin.y)
+                edge.l = edge.origin.x - edge.k*edge.origin.y
         
         mesh.addFace(ccwFace) #connect (prev, next) and add face
         
@@ -191,7 +197,7 @@ class Division:
 
     def handleEndVertex(self, v):
         prevEdge = v.outgoingEdge.prev
-        if prevEdge.helper.type == 'M':
+        if  prevEdge.helper.type == 'M':
             self.addedDiags.add(self.polygon.addDiagDiv(v, prevEdge.helper))
         self.T.discard(prevEdge)
         
@@ -202,22 +208,25 @@ class Division:
         left = self.T[self.T.index(e) - 1] #na lewo od e_{i}, na pewno nalezy do T bo dodalem dopiero
         self.addedDiags.add(self.polygon.addDiagDiv(v, left.helper))
         left.helper = v
+        print(id(left))
 
     def handleMergeVertex(self, v):
-        prevEdge = v.outgoingEdge.prev #prevedge tutaj na pewnonie jest diagonalną bo dopiero po zamieceniu v moze powstac do niego diagonalna. 
-        if prevEdge.helper.type == 'M':
+        second = False
+        prevEdge = v.outgoingEdge.prev #prevedge tutaj na pewno nie jest diagonalną bo dopiero po zamieceniu v moze powstac do niego diagonalna. ALE sprawdzic nie zaszkodzi
+        if  prevEdge.helper.type == 'M':
             self.addedDiags.add(self.polygon.addDiagDiv(v, prevEdge.helper))
+            second = True
         left = self.T[self.T.index(prevEdge) - 1] #na lewo od e_{i-1}, na pewno w T bo jest przy lewym przbu
         self.T.discard(prevEdge)
         if left.helper.type == 'M':
-            self.addedDiags.add(self.polygon.addDiagDiv(v, left.helper))
+            self.addedDiags.add(self.polygon.addDiagDiv(v, left.helper, second))
         left.helper = v
-    
+        
     
     def handleRegularVertex(self, v):
         if v.type == 'RL': #intP po prawej    
             prevEdge = v.outgoingEdge.prev
-            if prevEdge.helper is not None and prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge zostal zakryty przekatna
+            if  prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge nie zostal zakryty przekatna
                 self.addedDiags.add(self.polygon.addDiagDiv(v, prevEdge.helper))
             self.T.discard(prevEdge)
             v.outgoingEdge.helper = v
@@ -250,8 +259,8 @@ class Division:
             newface.outerEdge = diagTwin
             diagTwin.face = newface
             visited[diagTwin] = True
-            q = diag.next
-            while q != diag:
+            q = diagTwin.next
+            while q != diagTwin:
                 q.face = newface
                 visited[q] = True
                 q = q.next
@@ -316,6 +325,7 @@ class Triangulation:
         self.currFace = currFace
         self.vertices = self.mesh.extractFaceVertices(currFace)
         self.left = [True]*(len(self.vertices))
+        self.addedDiags = []
     def branches(self): 
         '''
         Dzieli na lewą i prawą gałąź - do prawej należy najniższy punkt, do lewej najwyższy.
@@ -330,10 +340,18 @@ class Triangulation:
                 mini = vert.y
                 endPointIdx = i
         i = endPointIdx
+        leftIdxs = []
+        rightIdxs = []
         while i != initialPointIdx:
             self.left[i] = False
+            rightIdxs.append(i)
             i = (i + 1) % len(self.vertices)
-    
+            
+        while i != endPointIdx:
+            leftIdxs.append(i)
+            i = (i + 1) % len(self.vertices)
+            
+        return leftIdxs, rightIdxs
     def orient(self, A, B, C):
         det = det_sarrus(A, B, C) 
         if det >= self.eps:
@@ -354,13 +372,7 @@ class Triangulation:
         return det >= self.eps
 
     def mergeBranches(self):
-        leftIdxs = []
-        rightIdxs = []
-        for i in range (len(self.left)):
-            if self.left[i]:
-                leftIdxs.append(i)
-            else:
-                rightIdxs.append(i)
+        leftIdxs, rightIdxs = self.branches()
         idxs = [None]*(len(self.left))
         l,r = 0, len(rightIdxs) - 1
         for i in range (len(idxs)):
@@ -377,23 +389,27 @@ class Triangulation:
                     idxs[i + 1:] = leftIdxs[l:]
                     break
         return idxs
-    def updateMesh(self, idx1, idx2): #dodaje przekatna i aktualizuje faces
-        if idx1 > idx2: #chcemy posortowane bo indeksy sa ccw, a dodajac przekatna chcemy to zrobic w dobrym kierunku
-            idx1, idx2 = idx2, idx1
-        self.mesh.addDiagDiv(self.vertices[idx1], self.vertices[idx2])
-        newFace1 = Face()
-        diag = self.vertices[idx1].outgoingEdge
-        newFace1.outerEdge = diag 
-        newFace2 = Face() 
-        diagTwin = self.vertices[idx2].outgoingEdge
-        newFace2.outerEdge = diagTwin
-        for i in range (3):
-            diag.face = newFace1
-            diag = diag.next
+    
+    # def updateMesh(self, idx1, idx2): #dodaje przekatna i aktualizuje faces
+    #     if idx1 > idx2: #chcemy posortowane bo indeksy sa ccw, a dodajac przekatna chcemy to zrobic w dobrym kierunku
+    #         idx1, idx2 = idx2, idx1
+    #     diag = self.mesh.addDiagDiv(self.vertices[idx1], self.vertices[idx2])
+    #     newFace1 = Face()
+    #     # diag = self.vertices[idx1].outgoingEdge
+    #     newFace1.outerEdge = diag 
+    #     newFace2 = Face() 
+    #     # diagTwin = self.vertices[idx2].outgoingEdge
+    #     diagTwin = diag.twin
+    #     newFace2.outerEdge = diagTwin
+    #     for i in range (3):
+    #         diag.face = newFace1
+    #         diag = diag.next
 
-            diagTwin.face = newFace2
-            diagTwin = diagTwin.next
-        
+    #         diagTwin.face = newFace2
+    #         diagTwin = diagTwin.next
+    #     self.mesh.faces.append(newFace1)
+    #     self.mesh.faces.append(newFace2)
+
     def algorithm(self):
         '''
         GŁÓWNY ALGORYTM TRIANGULACJI. Tworzy trójkąty i zapisuje je do listy w kolejności ccw.
@@ -408,13 +424,15 @@ class Triangulation:
                 first = stack.pop()
                 u = stack.pop()
                 if abs(idxs[idx] - first) != N - 1 and abs(idxs[idx] - first) != 1:
-                    # self.diag.append((idxs[idx], first))
-                    self.updateMesh(idxs[idx], first)
+                    # self.addedDiags.append((idxs[idx], first))
+                    self.addedDiags.append((self.vertices[idxs[idx]], self.vertices[first]))
+                    # self.updateMesh(idxs[idx], first)
                 while stack:
                     u,v = stack.pop(), u
                     if abs(idxs[idx] - v) != N - 1 and abs(idxs[idx] - v) != 1:  #żeby nie dodawał gdy to jest bok
-                        # self.diag.append((idxs[idx], v))
-                        self.updateMesh(idxs[idx], v)
+                        # self.addedDiags.append((idxs[idx], v))
+                        self.addedDiags.append((self.vertices[idxs[idx]], self.vertices[v]))
+                        # self.updateMesh(idxs[idx], v)
                 stack.append(first)
                 stack.append(idxs[idx])
             else:
@@ -423,8 +441,9 @@ class Triangulation:
                 u = stack.pop() 
                 while self.inside(idxs[idx], v, u): 
                     if abs(idxs[idx] - u) != N - 1 and abs(idxs[idx] - u) != 1:
-                        # self.diag.append((idxs[idx], u))
-                        self.updateMesh(idxs[idx], u)
+                        # self.addedDiags.append((idxs[idx], u))
+                        self.addedDiags.append((self.vertices[idxs[idx]], self.vertices[u]))
+                        # self.updateMesh(idxs[idx], u)
                     if not stack: #jesli skonczyl sie stack to nic nadmiarowego nie usunelismy
                         flag = True
                         break
@@ -434,10 +453,26 @@ class Triangulation:
                 if not flag: 
                     stack.append(v) 
                 stack.append(idxs[idx])
-    
+
+def visualize(mesh, addedDiags):
+    fig, ax = plt.subplots()
+    xlim = (0,10)
+    ylim = (0,10)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    edgeSet = set()
+    for edge in mesh.edges:
+        if edge not in edgeSet and edge.twin not in edgeSet:
+            edgeSet.add(edge)
+    pts = [(edge.origin, edge.twin.origin) for edge in edgeSet]
+    pts += addedDiags
+    for pair in pts:
+        ax.plot((pair[0].x, pair[1].x), (pair[0].y, pair[1].y))
+    plt.show()
+
 
 if __name__ == "__main__":
-    figure = loadFigure()
+    figure = loadFigure("hardmountains.json")
     points = figure["points"]
     X, Y = zip(*points)
     for i in range (len(points)):
@@ -448,12 +483,19 @@ if __name__ == "__main__":
     division.divide()
     division.visualize()
     facesIdxToRemove = set()
-    for i, face in enumerate(division.polygon.faces):
+    allDiags = []
+    for i, face in enumerate(division.polygon.faces[::]):
+        print(i, face)
         trian = Triangulation(division.polygon, currFace=face)
         if len(trian.vertices) == 3:
             continue
         else:
             trian.algorithm()
-            facesIdxToRemove.add(i)
+            allDiags += trian.addedDiags
+            division.polygon.faces.remove(face)
+            print(division.polygon)
+            print(division.polygon.faces)
+    visualize(division.polygon, allDiags)
+
     division.polygon.faces = list(filter(lambda faceIdx: faceIdx not in facesIdxToRemove, division.polygon.faces))
     

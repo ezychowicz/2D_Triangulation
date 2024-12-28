@@ -20,7 +20,8 @@ class HalfEdge:
         self.k = None #x = ky + l
         self.l = None
         self.helper = None
-        # self.verticeX =
+        self.CCW = True
+    
     def currX(self):
         # if verticeX is not None:
         #     return verticeX
@@ -68,8 +69,8 @@ class HalfEdgeMesh:
         # Powiązanie krawędzi z wierzchołkami
         edge1.origin = v1
         edge2.origin = v2
-        v1.outgoingEdge = edge1
-        v2.outgoingEdge = edge2
+        # v1.outgoingEdge = edge1  #to nie moze sie dziac bo w handleach potrzebuje zeby v.outgoingi byly nieprzekatnymi
+        # v2.outgoingEdge = edge2
 
         # Powiązanie krawędzi jako twin
         edge1.twin = edge2
@@ -100,7 +101,7 @@ class HalfEdgeMesh:
 
         return face
 
-    def addDiagDiv(self, v1, v2):
+    def addDiagDiv(self, v1, v2, second = False):
         '''
         Dodaje przekątną między punktami, rozdziela face na dwie nowe ściany.
         Lemat: Zanim dwa wierzchołki się połączą, mają maksymalnie jedną wspólną ścianę. 
@@ -108,14 +109,41 @@ class HalfEdgeMesh:
         modyfikuje tylko krawedzie w sumie, da sie przeiterowac po wszystkich krawedziach majac tylko to (i chyba 
         oznaczyc sciany tez)
         '''
-        v1PrevEdge = v1.outgoingEdge.prev
-        v1NextEdge = v1.outgoingEdge
-        v2PrevEdge = v2.outgoingEdge.prev
-        v2NextEdge = v2.outgoingEdge
-        
+        if not v1.outgoingEdge.CCW:
+            v1PrevEdge = v1.outgoingEdge.twin
+            v1NextEdge = v1.outgoingEdge.twin.next
+        else:
+            v1PrevEdge = v1.outgoingEdge.prev
+            v1NextEdge = v1.outgoingEdge
+        if not v2.outgoingEdge.CCW:
+            v2PrevEdge = v2.outgoingEdge.twin
+            v2NextEdge = v2.outgoingEdge.twin.next
+        else:
+            v2PrevEdge = v2.outgoingEdge.prev
+            v2NextEdge = v2.outgoingEdge
+        # if second:
+        #     v1PrevEdge = v1.outgoingEdge.twin
+        #     v1NextEdge = v1.outgoingEdge.twin.next
+        #     v2PrevEdge = v2.outgoingEdge.prev
+        #     v2NextEdge = v2.outgoingEdge
+        # else:
+        #     v1PrevEdge = v1.outgoingEdge.prev
+        #     v1NextEdge = v1.outgoingEdge
+        #     v2PrevEdge = v2.outgoingEdge.prev
+        #     v2NextEdge = v2.outgoingEdge
+        EPS = 10**(-8)
         new, newTwin = self.addEdge(v1,v2)
-        new.k = (new.origin.x - new.twin.origin.x)/(new.origin.y - new.twin.origin.y)
-        new.l = new.origin.x - new.k*new.origin.y
+        if new.origin.y == new.twin.origin.y: 
+            if new.origin.x < new.twin.origin.x:
+                    new.k = (new.origin.x - new.twin.origin.x)/((new.origin.y + EPS) - new.twin.origin.y)
+                    new.l = new.origin.x - new.k*(new.origin.y + EPS)
+            else:
+                new.k = (new.twin.origin.x - new.origin.x)/((new.twin.origin.y + EPS) - new.origin.y)
+                new.l = new.twin.origin.x - new.k*(new.twin.origin.y + EPS)
+        else:
+            new.k = (new.origin.x - new.twin.origin.x)/(new.origin.y - new.twin.origin.y)
+            new.l = new.origin.x - new.k*new.origin.y
+        
         newTwin.k, newTwin.l = new.k, new.l
         new.prev = v1PrevEdge
         new.next = v2NextEdge
@@ -128,10 +156,36 @@ class HalfEdgeMesh:
         v1NextEdge.prev = newTwin
         v2PrevEdge.next = newTwin
 
-        # v1.outgoingEdge = new #aktualizujemy tez dla wierzcholkow krawedzei wychodzace
-        # v2.outgoingEdge = newTwin
+        v1.outgoingEdge = new
+        v2.outgoingEdge = newTwin
+        if v1.x < v2.x:
+            v1.outgoingEdge.CCW = False
+        else:
+            v2.outgoingEdge.CCW = False
         return new
     
+    # def addDiagEdges(self, e1, e2):
+    #     EPS = 10**(-8)
+    #     new, newTwin = self.addEdge(v1,v2)
+    #     if new.origin.y == new.twin.origin.y: 
+    #         if new.origin.x < new.twin.origin.x:
+    #                 new.k = (new.origin.x - new.twin.origin.x)/((new.origin.y + EPS) - new.twin.origin.y)
+    #                 new.l = new.origin.x - new.k*(new.origin.y + EPS)
+    #         else:
+    #             new.k = (new.twin.origin.x - new.origin.x)/((new.twin.origin.y + EPS) - new.origin.y)
+    #             new.l = new.twin.origin.x - new.k*(new.twin.origin.y + EPS)
+    #     else:
+    #         new.k = (new.origin.x - new.twin.origin.x)/(new.origin.y - new.twin.origin.y)
+    #         new.l = new.origin.x - new.k*new.origin.y
+    #     new.next = e2
+    #     new.prev = e1
+    #     newTwin.next = e1
+    #     newTwin.prev = e2
+    #     e1.next = new
+    #     e2.prev = new
+    #     e1.prev = newTwin
+    #     e2.next = newTwin
+
     def extractFaceVertices(self, face):
         vertices = []
         start = face.outerEdge
