@@ -109,28 +109,29 @@ class HalfEdgeMesh:
         modyfikuje tylko krawedzie w sumie, da sie przeiterowac po wszystkich krawedziach majac tylko to (i chyba 
         oznaczyc sciany tez)
         '''
-        if not v1.outgoingEdge.CCW:
-            v1PrevEdge = v1.outgoingEdge.twin
-            v1NextEdge = v1.outgoingEdge.twin.next
-        else:
+        if v2.type == 'S':
             v1PrevEdge = v1.outgoingEdge.prev
             v1NextEdge = v1.outgoingEdge
-        if not v2.outgoingEdge.CCW:
-            v2PrevEdge = v2.outgoingEdge.twin
-            v2NextEdge = v2.outgoingEdge.twin.next
+            if  v1.x > v2.x: #jestesmy po prawej, intP po prawej od outgoing, trzeba odwrocic zeby bylo CCW
+                v2PrevEdge = v2.outgoingEdge.twin
+                v2NextEdge = v2.outgoingEdge.twin.next
+            else:
+                v2PrevEdge = v2.outgoingEdge.prev
+                v2NextEdge = v2.outgoingEdge
         else:
-            v2PrevEdge = v2.outgoingEdge.prev
-            v2NextEdge = v2.outgoingEdge
-        # if second:
-        #     v1PrevEdge = v1.outgoingEdge.twin
-        #     v1NextEdge = v1.outgoingEdge.twin.next
-        #     v2PrevEdge = v2.outgoingEdge.prev
-        #     v2NextEdge = v2.outgoingEdge
-        # else:
-        #     v1PrevEdge = v1.outgoingEdge.prev
-        #     v1NextEdge = v1.outgoingEdge
-        #     v2PrevEdge = v2.outgoingEdge.prev
-        #     v2NextEdge = v2.outgoingEdge
+            if not v1.outgoingEdge.CCW:
+                v1PrevEdge = v1.outgoingEdge.twin
+                v1NextEdge = v1.outgoingEdge.twin.next
+            else:
+                v1PrevEdge = v1.outgoingEdge.prev
+                v1NextEdge = v1.outgoingEdge
+            if not v2.outgoingEdge.CCW:
+                v2PrevEdge = v2.outgoingEdge.twin
+                v2NextEdge = v2.outgoingEdge.twin.next
+            else:
+                v2PrevEdge = v2.outgoingEdge.prev
+                v2NextEdge = v2.outgoingEdge
+     
         EPS = 10**(-8)
         new, newTwin = self.addEdge(v1,v2)
         if new.origin.y == new.twin.origin.y: 
@@ -157,13 +158,15 @@ class HalfEdgeMesh:
         v2PrevEdge.next = newTwin
 
         v1.outgoingEdge = new
-        v2.outgoingEdge = newTwin
-        if v1.x < v2.x:
-            v1.outgoingEdge.CCW = False
-        else:
-            v2.outgoingEdge.CCW = False
+        if v2.type != "S":
+            v2.outgoingEdge = newTwin
+            if v1.type == 'M':
+                if v1.x < v2.x:
+                    v1.outgoingEdge.CCW = False
+                else:
+                    v2.outgoingEdge.CCW = False
         return new
-    
+
     # def addDiagEdges(self, e1, e2):
     #     EPS = 10**(-8)
     #     new, newTwin = self.addEdge(v1,v2)

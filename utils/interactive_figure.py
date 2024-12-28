@@ -7,7 +7,7 @@ from pathlib import Path
 
 def export_json(points, edges): 
     data_dir = Path(__file__).parent.parent / "data"
-    path_to_json  = data_dir / "hardmountains.json" #tworzy ścieżkę do jsona pobierając ścieżkę do tego pliku
+    path_to_json  = data_dir / "exportData.json" #tworzy ścieżkę do jsona pobierając ścieżkę do tego pliku
     figure = {"points": points, "edges": edges}
     with open(path_to_json, 'w') as json_file:
         json.dump(figure, json_file, indent = 4)

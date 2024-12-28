@@ -6,7 +6,7 @@ from sortedcontainers import SortedSet
 from functools import cmp_to_key
 import matplotlib.pyplot as plt
 import json
-import ctypes
+
 #na razie zakladam ze nie bedzie punktow o rownych y, trzeba bedzie te jakies rotacje dorobic
 savefig = False
 EPS = 10**(-10)
@@ -45,7 +45,7 @@ class Structures:
         v1, v2 = self.points[-1], self.points[0]
         edge1.origin = v1
         edge2.origin = v2
-        v1.outgoingEdge = edge1 #nie zmienam outgoingEdge dla pierwszego wierzcholka bo juz ma dobra krawedz w CCW
+        v1.outgoingEdge = edge1 #nie zmieniam outgoingEdge dla pierwszego wierzcholka bo juz ma dobra krawedz w CCW
         edge1.twin = edge2
         edge2.twin = edge1
         mesh.edges.append(edge1)
@@ -214,8 +214,8 @@ class Division:
         second = False
         prevEdge = v.outgoingEdge.prev #prevedge tutaj na pewno nie jest diagonalną bo dopiero po zamieceniu v moze powstac do niego diagonalna. ALE sprawdzic nie zaszkodzi
         if  prevEdge.helper.type == 'M':
-            self.addedDiags.add(self.polygon.addDiagDiv(v, prevEdge.helper))
-            second = True
+            self.addedDiags.add(self.polygon.addDiagDiv(v, prevEdge.helper, ))
+            second = True 
         left = self.T[self.T.index(prevEdge) - 1] #na lewo od e_{i-1}, na pewno w T bo jest przy lewym przbu
         self.T.discard(prevEdge)
         if left.helper.type == 'M':
@@ -472,7 +472,7 @@ def visualize(mesh, addedDiags):
 
 
 if __name__ == "__main__":
-    figure = loadFigure("hardmountains.json")
+    figure = loadFigure("mirroredmountains.json")
     points = figure["points"]
     X, Y = zip(*points)
     for i in range (len(points)):
