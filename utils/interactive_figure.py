@@ -5,12 +5,21 @@ import time
 from pathlib import Path
 
 
-def export_json(points, edges): 
-    data_dir = Path(__file__).parent.parent / "data"
-    path_to_json  = data_dir / "exportData.json" #tworzy ścieżkę do jsona pobierając ścieżkę do tego pliku
+def export_json_path(points, edges, path_to_json):
     figure = {"points": points, "edges": edges}
     with open(path_to_json, 'w') as json_file:
         json.dump(figure, json_file, indent = 4)
+
+def export_json_triangulation_path(points, triangles, path_to_json):
+    figure = {"points": points, "triangles": triangles}
+    with open(path_to_json, 'w') as json_file:
+        json.dump(figure, json_file, indent = 4)
+
+def export_json(points, edges):
+    data_dir = Path(__file__).parent.parent / "data"
+    path_to_json  = data_dir / "exportData.json" #tworzy ścieżkę do jsona pobierając ścieżkę do tego pliku
+    export_json_path(path_to_json)
+
 
 class Commit:
     def __init__(self, fig, ax):
@@ -30,17 +39,17 @@ class Commit:
         if event.button == 3:
             mini = float('inf')
             to_remove = None
-            for idx, point in enumerate(self.points): 
+            for idx, point in enumerate(self.points):
                 old_cord = point
                 if self.dist(old_cord, new_cord) < eps and self.dist(old_cord, new_cord) < mini:
                     to_remove = idx
                     mini = self.dist(old_cord, new_cord)
             if to_remove is not None:
                 self.points.pop(to_remove)
-       
+
     def dist(self,A,B):
         return (A[0] - B[0])**2 + (A[1] - B[1])**2
-    
+
     def push_changes(self):
         plt.sca(self.fig.axes[0])
         for collection in self.ax.collections:
@@ -73,6 +82,6 @@ def graphing(xlim,ylim):
         edges.append((i - 1, i))
     edges.append((N - 1, 0))
     export_json(commit.points, edges)
-    
+
 if __name__ == '__main__':
     graphing((0,10), (0,10))

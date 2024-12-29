@@ -53,9 +53,6 @@ def circleTest(a, b, c, p):
       [p.x, p.y, p.x**2 + p.y**2, 1],
   ])
 
-  # if abs(np.linalg.det(matrix)) < 0.00001:
-  #   return 0
-
   return sgn(np.linalg.det(matrix))
 
 def segmentsIntersect(a, b, c, d):
@@ -178,6 +175,8 @@ class HalfEdge:
 
 
 def getBoundingTriangle(points):
+  if len(points) == 0:
+    return Vector(-1000, -1000), Vector(1000, -1000), Vector(0, 1000)
   minx = points[0].x
   maxx = points[0].x
   miny = points[0].x
@@ -522,18 +521,8 @@ class Mesh:
 
     return ans
 
-def delaunayNaive(points):
-  mesh = Mesh(points)
 
-  for p in range(len(points) - 3):
-    for face in range(len(mesh.faces)):
-      if len(mesh.faces[face].children) == 0:
-        if mesh.contains(face, points[p]):
-          mesh.addVertexAndLegalize(face, p)
-
-  return mesh.toTriangleList(False)
-
-def delaunay(points, constrains = []):
+def cdt(points, constrains = []):
   mesh = Mesh(points)
 
   indices = [i for i in range(0, len(points) - 3)]
@@ -552,14 +541,9 @@ def delaunay(points, constrains = []):
 
   return mesh.toTriangleList(True, len(constrains) > 0)
 
+
 def triangulatePolygon(points):
-  constrains = [ (i, (i + 1) % len(points)) for i in range(len(points))]
-  #constrains = []
-  triangulation = delaunay(points, constrains)
-  ans = []
-  for (i1, i2, i3) in triangulation:
-    ans.append((i1, i2, i3))
-  return ans
+  return cdt(points, [ (i, (i + 1) % len(points)) for i in range(len(points))])
 
 def textScatter(xs, ys, **kwargs):
   # Create a scatter plot
@@ -634,26 +618,6 @@ def interactive():
   cid = fig.canvas.mpl_connect('motion_notify_event', onmoved)
   plt.show()
 
-
-import os
-
-def clear_terminal():
-  if os.name == 'nt':
-    os.system('cls')
-  else:
-    os.system('clear')
-
-def testForCrash():
-  for _ in range(100000):
-    n = random.randint(1, 20)
-    points = [ Vector(random.randint(-10, 10), random.randint(-10, 10)) for _ in range(n) ]
-    clear_terminal()
-    print(points)
-    #try:
-    ans = delaunay(points)
-    #except Exception as e:
-    #print("HAHA")
-
 def genRandomOnCircle(n, radius):
   angles = [random.random() * 2 * math.pi for _ in range(n)]
   angles.sort()
@@ -678,10 +642,10 @@ def ogreTest():
     a, b = input().split()
     a = int(a)
     b = int(b)
-    #constrains.append((a, b))
-    constrains.append((b, a))
+    constrains.append((a, b))
+    #constrains.append((b, a))
 
-  t = delaunay(points, constrains)
+  t = cdt(points, constrains)
 
   xs = [ p.x for p in points ]
   ys = [ p.y for p in points ]
@@ -698,11 +662,12 @@ def ogreTest():
     plt.plot(txs, tys, color = 'black')
   plt.show()
 
+
 if __name__ == "__main__":
-  ogreTest()
-  quit(0)
+  # ogreTest()
+  # quit(0)
   #testForCrash()
-  #interactive()
+  interactive()
   #quit(0)
   #points = [Vector(-42.31, 17.54), Vector(-277.81, -231.21), Vector(-295.61, -797.51), Vector(403.87, -824.06), Vector(673.50, -633.73), Vector(372.49, -128.59), Vector(137.48, -372.77)]
   n = int(input())
