@@ -9,7 +9,7 @@ def drawTriangle(pointsIndices, points):
 
 def draw(points, triangles):
     '''
-    param: points - list of points, triangles - list of indices: [(i,j,k): i,j,k indices of points in points (CCW order)]
+    param: points - list of points, triangles - list of indices: [(i,j,k): i,j,k indices of points in points]
     '''
     for triangle in triangles:
         drawTriangle(triangle, points)
