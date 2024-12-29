@@ -3,16 +3,6 @@ import math
 import matplotlib.pyplot as plt
 from collections import deque
 
-
-
-
-# TODO
-# - refactor a bit?
-# - test on artem-ogre tests
-# literka a (odwrotna)
-# gitara
-# cdt
-
 class Vector:
   def __init__(self, x, y):
     self.x = x
@@ -36,6 +26,7 @@ def orientation(v1, v2, v3):
   det = orientationDet(v1, v2, v3)
   return -sgn(det)
 
+# checks if point p lies on segment a->b, uses Eps for tolerance
 def onsegment(a, b, p, Eps):
   det = orientationDet(a, b, p)
   if abs(det) > Eps:
@@ -43,6 +34,10 @@ def onsegment(a, b, p, Eps):
 
   return p.x >= min(a.x, b.x) and p.x <= max(a.x, b.x) and p.y >= min(a.y, b.y) and p.y <= max(a.y, b.y)
 
+# returns:
+# -1 when circumcircle (a, b c) doesn't contain p
+#  0 when p lies on circumcircle (a, b c)
+#  1 when p lies inside circumcircle (a, b c)
 def circleTest(a, b, c, p):
   import numpy as np
 
@@ -55,6 +50,7 @@ def circleTest(a, b, c, p):
 
   return sgn(np.linalg.det(matrix))
 
+# checks if segment a->b and c-> intersect
 def segmentsIntersect(a, b, c, d):
   oa = orientation(c, d, a)
   ob = orientation(c, d, b)
@@ -62,6 +58,7 @@ def segmentsIntersect(a, b, c, d):
   od = orientation(a, b, d)
   return oa * ob < 0 and oc * od < 0
 
+# checks if quad is convex
 def quadConvex(a, b, c, d):
   return orientation(a, b, c) == orientation(b, c, d) == orientation(c, d, a) == orientation(d, a, b) == -1
 
@@ -76,6 +73,7 @@ class Face:
   def addChild(self, face):
     self.children.append(face)
 
+  # checks if face contains given point
   def contains(self, point, vertices):
     return orientation(vertices[self.vertex1], vertices[self.vertex2], point) <= 0 and orientation(vertices[self.vertex2], vertices[self.vertex3], point) <= 0 and orientation(vertices[self.vertex3], vertices[self.vertex1], point) <= 0
 
@@ -86,6 +84,7 @@ class HalfEdge:
     self.vertex = vertex
     self.face = face
 
+  #  flips edge
   def flip(self):
     prev1 = self.next.next
     next1 = self.next
@@ -104,6 +103,7 @@ class HalfEdge:
 
     return newEdge1
 
+  # splits face - new vertex lies inside the face
   def splitFace(self, newVertex):
     e1 = self
     e2 = e1.next
@@ -135,6 +135,7 @@ class HalfEdge:
 
     return (e1, e2, e3)
 
+  # splits edge - when new vertex lies on edge
   def splitEdge(self, newVertex):
     e = self
     e1 = e.next
@@ -173,7 +174,7 @@ class HalfEdge:
 
     return (e1, e2, e3, e4)
 
-
+# finds trinagle that contains all points, else returns some arbitrary triangle (used for interactive mode)
 def getBoundingTriangle(points):
   if len(points) == 0:
     return Vector(-1000, -1000), Vector(1000, -1000), Vector(0, 1000)
@@ -203,8 +204,7 @@ class Mesh:
     self.OnSegmentEpsilon = 10**-6
 
     self.vertices = vertices
-    self.faces = []
-    self.edgeExists = set()
+    self.faces = []    
     self.verticesEdges = []
 
     p1, p2, p3 = getBoundingTriangle(vertices)
@@ -224,24 +224,21 @@ class Mesh:
     self.faces.append(Face(e1))
     self.root = 0
 
-    self.constrained = set()
+    self.constrained = set()  
 
-  def normalizedEdgeForSet(self, edge):
-    return ( min(edge.vertex, edge.next.vertex), max(edge.vertex, edge.next.vertex) )
-
-  def removeEdgeFromSet(self, edge):
-    self.edgeExists.remove((edge.vertex, edge.next.vertex))
+  def removeEdgeFromSet(self, edge):    
     self.verticesEdges[edge.vertex].remove(edge)
-
-  def addEdgeToSet(self, edge):
-    self.edgeExists.add((edge.vertex, edge.next.vertex))
+    
+  def addEdgeToSet(self, edge):    
     while len(self.verticesEdges) <= edge.vertex:
       self.verticesEdges.append(set())
     self.verticesEdges[edge.vertex].add(edge)
 
+  # checks if edge is present in triangulation
   def edgeAlreadyInTriangulation(self, index1, index2):
-    return (min(index1, index2), max(index1, index2)) in self.edgeExists
+    return index2 in self.verticesEdges[index1]    
 
+  # flips quadritelar diagonal
   def flipEdge(self, edge):
     self.removeEdgeFromSet(edge)
     if edge.twin:
@@ -273,9 +270,11 @@ class Mesh:
 
     return newEdge
 
+  # check if edge is legal
   def isEdgeLegal(self, edge):
     return circleTest(self.vertices[edge.vertex], self.vertices[edge.next.vertex], self.vertices[edge.next.next.vertex], self.vertices[edge.twin.next.next.vertex]) <= 0
 
+  # makes edge meet delaunay criteria
   def legalizeEdge(self, edge):
     if not self.isEdgeLegal(edge):
       e1 = edge.next
@@ -288,6 +287,7 @@ class Mesh:
       if e2.twin:
         self.legalizeEdge(e2.twin)
 
+  # adds vertex on edge and keeps delawunay properties
   def addVertexToEdgeAndLegalize(self, edge, vertexIndex):
     face1 = edge.face
     face2 = edge.twin.face
@@ -339,6 +339,7 @@ class Mesh:
     if e4.twin:
       self.legalizeEdge(e4.twin)
 
+  # adds vertex inside face and keeps delaunay properties
   def addVertexToFaceAndLegalize(self, face, vertexIndex):
     e1, e2, e3 = self.faces[face].edge.splitFace(vertexIndex)
 
@@ -376,6 +377,7 @@ class Mesh:
     if e3.twin:
       self.legalizeEdge(e3.twin)
 
+  # adds vertex to face and keep delaunay properties
   def addVertexAndLegalize(self, face, vertexIndex):
     edge = self.faces[face].edge
     if onsegment(self.vertices[edge.vertex], self.vertices[edge.next.vertex], self.vertices[vertexIndex], self.OnSegmentEpsilon):
@@ -387,10 +389,11 @@ class Mesh:
     else:
       self.addVertexToFaceAndLegalize(face, vertexIndex)
 
-
-  def contains(self, face, vertex):
+  # check if face contains vertex
+  def faceContains(self, face, vertex):
     return self.faces[face].contains(vertex, self.vertices)
 
+  # returns face which contains given vertex or None if none of the faces contains it
   def locate(self, vertex):
     face = self.root
 
@@ -400,7 +403,7 @@ class Mesh:
     while self.faces[face].children:
       next = None
       for child in self.faces[face].children:
-        if self.contains(child, vertex):
+        if self.faceContains(child, vertex):
           next = child
           break
       if next == None:
@@ -409,9 +412,11 @@ class Mesh:
 
     return face
 
+  # checks if segments intersect, uses indices instead of vertices
   def segmentsIntersect(self, index1, index2, index3, index4):
     return segmentsIntersect(self.vertices[index1], self.vertices[index2], self.vertices[index3], self.vertices[index4])
 
+  # returns deque of edges that intersect segment index1 -> index2
   def findIntersectingEdges(self, index1, index2):
     edge = None
     for e in self.verticesEdges[index1]:
@@ -437,6 +442,7 @@ class Mesh:
         break
     return ans
 
+  # constrains edge
   def constrainEdge(self, index1, index2):
     self.constrained.add((index1, index2))
     index1, index2 = (min(index1, index2), max(index1, index2))
@@ -456,8 +462,8 @@ class Mesh:
         if i1 > i2:
           i1, i2 = i2, i1
         if i1 != index1 and i2 != index2 and segmentsIntersect(self.vertices[e.vertex], self.vertices[e.next.vertex], self.vertices[index1], self.vertices[index2]):
-          intersecting.append(e)
-        elif self.normalizedEdgeForSet(e) != (index1, index2):
+          intersecting.append(e)          
+        elif (min(e.vertex, e.next.vertex), max(e.vertex, e.next.vertex)) != (index1, index2):
           newEdges.append(e)
       else:
         intersecting.append(e)
@@ -471,6 +477,7 @@ class Mesh:
           newEdges[i] = self.flipEdge(newEdges[i])
           done = False
 
+  # finds inner edges - inside constrained polygons
   def findInner(self):
     queue = deque()
     visited = [False] * len(self.faces)
@@ -482,9 +489,7 @@ class Mesh:
         if e.next.vertex == i2:
           queue.append(e.face)
           visited[e.face] = True
-          break
-
-    # return visited
+          break    
 
     while queue:
       face = queue.popleft()
@@ -496,25 +501,24 @@ class Mesh:
         if (e.vertex, e.next.vertex) not in self.constrained and e.twin and not visited[e.twin.face]:
           queue.append(e.twin.face)
 
-
     return visited
 
 
+  # checks if face contains super triangle vertex
+  def usesSuperTriangle(self, face):
+    return ( len( [v for v in [self.faces[face].vertex1, self.faces[face].vertex2, self.faces[face].vertex3] if v in [len(self.vertices) - 1, len(self.vertices) - 2, len(self.vertices) - 3]]) > 0 )
+
+  # returns triangulation as triples of vertex indices for each triangle
+  # filterSuperTriangle: if set to true triangles that contain super triangle vertices won't be outputed
+  # removeOuter: if set to true removes triangles outside of constrained edges - constrained edges must form closed
+  # polygons or else it will delete everything, also assumes that interior is on left side of edge
   def toTriangleList(self, filterSuperTriangle, removeOuter = False):
-    ans = []
-
-    queue = []
-    l = 0
-
-    queue.append(self.root)
-
-    visited = [False] * len(self.faces)
-
+    ans = []    
     inside = self.findInner()
 
     for face in range(len(self.faces)):
       if len(self.faces[face].children) == 0:
-        superTriangleFilter = not filterSuperTriangle or not ( len( [v for v in [self.faces[face].vertex1, self.faces[face].vertex2, self.faces[face].vertex3] if v in [len(self.vertices) - 1, len(self.vertices) - 2, len(self.vertices) - 3]]) > 0 )
+        superTriangleFilter = not filterSuperTriangle or not self.usesSuperTriangle(face)
         outerFilter = not removeOuter or inside[face]
         if superTriangleFilter and outerFilter:
           ans.append((self.faces[face].vertex1, self.faces[face].vertex2, self.faces[face].vertex3))
@@ -522,11 +526,12 @@ class Mesh:
     return ans
 
 
-def cdt(points, constrains = []):
+def cdt(points, constrains = [], shuffle = False):
   mesh = Mesh(points)
 
   indices = [i for i in range(0, len(points) - 3)]
-  #random.shuffle(indices)
+  if shuffle:
+    random.shuffle(indices)
   already = set()
 
   for i in indices:
@@ -538,175 +543,8 @@ def cdt(points, constrains = []):
 
   for (i1, i2) in constrains:
     mesh.constrainEdge(i1, i2)
-
+    
   return mesh.toTriangleList(True, len(constrains) > 0)
-
 
 def triangulatePolygon(points):
   return cdt(points, [ (i, (i + 1) % len(points)) for i in range(len(points))])
-
-def textScatter(xs, ys, **kwargs):
-  # Create a scatter plot
-  scatter = plt.scatter(xs, ys, **kwargs)
-
-  # Add numbering to each point
-  for i, (xi, yi) in enumerate(zip(xs, ys)):
-    plt.text(xi, yi, str(i), fontsize=12, ha='right', va='bottom')
-
-  return scatter
-
-def interactive():
-  fig = plt.figure()
-  ax = fig.add_subplot(111)
-  ax.set_xlim([-2000, 2000])
-  ax.set_ylim([-2000, 2000])
-
-  mesh = Mesh([])
-
-
-  def onclick(event):
-    nonlocal mesh
-
-    prevPos = Vector(event.xdata, event.ydata)
-
-    if  event.inaxes:
-      if event.button == 1:
-        mesh.vertices.append(Vector(event.xdata, event.ydata))
-        l = mesh.locate(Vector(event.xdata, event.ydata))
-        if l != None:
-          mesh.addVertexAndLegalize(l, len(mesh.vertices) - 1)
-
-  def onmoved(event):
-    nonlocal mesh
-    #plt.scatter([p.x for p in mesh.vertices], [p.y for p in mesh.vertices], color = 'orange')
-
-    #print(mesh.vertices)
-    plt.clf()
-    textScatter([p.x for p in mesh.vertices], [p.y for p in mesh.vertices], color = 'orange')
-    t = mesh.toTriangleList(False)
-
-    for (i1, i2, i3) in t:
-      txs = [ mesh.vertices[i].x for i in [i1, i2, i3, i1] ]
-      tys = [ mesh.vertices[i].y for i in [i1, i2, i3, i1] ]
-      plt.plot(txs, tys, color = 'blue')
-
-    if  event.inaxes:
-      plt.scatter([event.xdata], [event.ydata])
-      l = mesh.locate(Vector(event.xdata, event.ydata))
-    else:
-      l = None
-    if l != None:
-      vs = [ mesh.vertices[i] for i in [mesh.faces[l].vertex1, mesh.faces[l].vertex2, mesh.faces[l].vertex3, mesh.faces[l].vertex1] ]
-      plt.plot([p.x for p in vs], [p.y for p in vs], color = 'red')
-    fig.canvas.draw()
-
-  prevValue = None
-
-  def on_key(event):
-    nonlocal prevValue
-    if event.key.isdigit():
-      digit_value = int(event.key)
-      if prevValue == None:
-        prevValue = digit_value
-      else:
-        mesh.constrainEdge(prevValue, digit_value)
-        prevValue = None
-
-  fig.canvas.mpl_connect('key_press_event', on_key)
-
-  cid = fig.canvas.mpl_connect('button_press_event', onclick)
-  cid = fig.canvas.mpl_connect('motion_notify_event', onmoved)
-  plt.show()
-
-def genRandomOnCircle(n, radius):
-  angles = [random.random() * 2 * math.pi for _ in range(n)]
-  angles.sort()
-  xs = [ math.cos(angles[i]) * radius for i in range(n) ]
-  ys = [ math.sin(angles[i]) * radius for i in range(n) ]
-  return xs, ys
-
-def ogreTest():
-  n, m = input().split()
-  n = int(n)
-  m = int(m)
-
-  points = []
-  for i in range(n):
-    x, y = input().split()
-    x = float(x)
-    y = float(y)
-    points.append(Vector(x, y))
-
-  constrains = []
-  for i in range(m):
-    a, b = input().split()
-    a = int(a)
-    b = int(b)
-    constrains.append((a, b))
-    #constrains.append((b, a))
-
-  t = cdt(points, constrains)
-
-  xs = [ p.x for p in points ]
-  ys = [ p.y for p in points ]
-  plt.scatter(xs, ys)
-  print(len(t))
-  for (i1, i2, i3) in t:
-    txs = [ xs[i1], xs[i2], xs[i3], xs[i1] ]
-    tys = [ ys[i1], ys[i2], ys[i3], ys[i1] ]
-    plt.plot(txs, tys)
-
-  for (i1, i2) in constrains:
-    txs = [ xs[i1], xs[i2] ]
-    tys = [ ys[i1], ys[i2] ]
-    plt.plot(txs, tys, color = 'black')
-  plt.show()
-
-
-if __name__ == "__main__":
-  # ogreTest()
-  # quit(0)
-  #testForCrash()
-  interactive()
-  #quit(0)
-  #points = [Vector(-42.31, 17.54), Vector(-277.81, -231.21), Vector(-295.61, -797.51), Vector(403.87, -824.06), Vector(673.50, -633.73), Vector(372.49, -128.59), Vector(137.48, -372.77)]
-  n = int(input())
-  points = []
-  for i in range(n):
-    x, y = input().split()
-    x = float(x)
-    y = float(y)
-    points.append(Vector(x, y))
-  #points = list(reversed(points))
-  # xs, ys = genRandomOnCircle(10000, 10)
-  # points = [ Vector(xs[i], ys[i]) for i in range(len(xs))]
-  t = triangulatePolygon(points)
-  #t = delaunay(points)
-  # points.pop()
-  # points.pop()
-  # points.pop()
-  xs = [ p.x for p in points ]
-  ys = [ p.y for p in points ]
-  textScatter(xs, ys)
-  plt.show()
-  plt.scatter(xs, ys)
-  print(len(t))
-  for (i1, i2, i3) in t:
-    txs = [ xs[i1], xs[i2], xs[i3], xs[i1] ]
-    tys = [ ys[i1], ys[i2], ys[i3], ys[i1] ]
-    plt.plot(txs, tys)
-  plt.show()
-
-
-
-
-
-# sources:
-# Some great thing about non-constrained delaunay https://ianthehenry.com/posts/delaunay/#fnref:2
-# constrained but in type script https://tchayen.com/constrained-delaunay-triangulation-from-a-paper
-# there is also chapter in 'the' book
-# https://cp-algorithms.com/geometry/delaunay.html
-# it seems there are few different options divida and conqure or online idk which one to use
-# http://www.geom.uiuc.edu/~samuelp/del_project.html
-# divide and conquer seems great dunno about constraining tho
-# https://web.archive.org/web/20210506140628if_/https://www.newcastle.edu.au/__data/assets/pdf_file/0019/22519/23_A-fast-algortithm-for-generating-constrained-Delaunay-triangulations.pdf
