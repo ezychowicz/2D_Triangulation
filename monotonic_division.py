@@ -52,16 +52,11 @@ class Structures:
         mesh.edges.append(edge2)
         ccwFace.append(edge1)
         for i, edge in enumerate(mesh.edges):
-            if edge.origin.y == edge.twin.origin.y: #tymczasowe rozw. bo jak bedzie duzo punktów współliniowych i to jeszcze niesasiadujacych to chyba nie zadziala
-                if edge.origin.x < edge.twin.origin.x:
-                    edge.k = (edge.origin.x - edge.twin.origin.x)/((edge.origin.y + EPS) - edge.twin.origin.y)
-                    edge.l = edge.origin.x - edge.k*(edge.origin.y + EPS)
-                else:
-                    edge.k = (edge.twin.origin.x - edge.origin.x)/((edge.twin.origin.y + EPS) - edge.origin.y)
-                    edge.l = edge.twin.origin.x - edge.k*(edge.twin.origin.y + EPS) 
-            else:
-                edge.k = (edge.origin.x - edge.twin.origin.x)/(edge.origin.y - edge.twin.origin.y)
-                edge.l = edge.origin.x - edge.k*edge.origin.y
+            pt1,pt2 = edge.origin, edge.twin.origin
+            edge.A = pt2.y - pt1.y
+            edge.B = pt1.x - pt2.x
+            edge.C = -(edge.A * pt1.x + edge.B * pt1.y)
+        
         
         mesh.addFace(ccwFace) #connect (prev, next) and add face
         
@@ -197,7 +192,7 @@ class Division:
 
     def handleEndVertex(self, v):
         prevEdge = v.outgoingEdge.prev
-        if  prevEdge.helper.type == 'M':
+        if prevEdge.helper is not None and prevEdge.helper.type == 'M':
             self.addedDiags.add(self.polygon.addDiagDiv(v, prevEdge.helper))
         self.T.discard(prevEdge)
         
@@ -213,7 +208,7 @@ class Division:
     def handleMergeVertex(self, v):
         second = False
         prevEdge = v.outgoingEdge.prev #prevedge tutaj na pewno nie jest diagonalną bo dopiero po zamieceniu v moze powstac do niego diagonalna. ALE sprawdzic nie zaszkodzi
-        if  prevEdge.helper.type == 'M':
+        if prevEdge.helper is not None and prevEdge.helper.type == 'M':
             self.addedDiags.add(self.polygon.addDiagDiv(v, prevEdge.helper, ))
             second = True 
         left = self.T[self.T.index(prevEdge) - 1] #na lewo od e_{i-1}, na pewno w T bo jest przy lewym przbu
@@ -226,7 +221,7 @@ class Division:
     def handleRegularVertex(self, v):
         if v.type == 'RL': #intP po prawej    
             prevEdge = v.outgoingEdge.prev
-            if  prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge nie zostal zakryty przekatna
+            if prevEdge.helper is not None and prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge nie zostal zakryty przekatna
                 self.addedDiags.add(self.polygon.addDiagDiv(v, prevEdge.helper))
             self.T.discard(prevEdge)
             v.outgoingEdge.helper = v
@@ -326,6 +321,7 @@ class Triangulation:
         self.vertices = self.mesh.extractFaceVertices(currFace)
         self.left = [True]*(len(self.vertices))
         self.addedDiags = []
+        self.triangles = []
     def branches(self): 
         '''
         Dzieli na lewą i prawą gałąź - do prawej należy najniższy punkt, do lewej najwyższy.
@@ -454,8 +450,52 @@ class Triangulation:
                     stack.append(v) 
                 stack.append(idxs[idx])
 
+
+    def appendTriangle(self, el):
+        if self.orient(self.points[el[0]], self.points[el[1]], self.points[el[2]]) == 1: #ujemny wyznacznik, zgodnie ze wskazowkami zegara
+            el = (el[0], el[2], el[1])
+        self.triangles.append(el)
+
+    def algorithmTriangles(self):
+        '''
+        GŁÓWNY ALGORYTM TRIANGULACJI. Tworzy trójkąty i zapisuje je do listy w kolejności ccw.
+        '''
+        N = len(self.vertices)
+        self.branches()
+        idxs = self.mergeBranches() #posortowana wzgledem y lista indeksów
+        
+        
+        stack = [idxs[0], idxs[1]]
+        for idx in range (2, N):
+            if self.left[idxs[idx]] != self.left[stack[-1]]: #jeśli łańcuchy różne
+                first = stack.pop()
+                u = stack.pop()
+                self.appendTriangle((idxs[idx], u, first)) 
+                while stack:
+                    u,v = stack.pop(), u
+                    self.appendTriangle((idxs[idx], u, v))
+                stack.append(first)
+                stack.append(idxs[idx])
+            else:
+                flag = False
+                v = stack.pop() 
+                u = stack.pop() 
+                while self.inside(idxs[idx], v, u): 
+                    self.appendTriangle((idxs[idx], u, v))
+                    if not stack: #jesli skonczył sie stack to nic nadmiarowego nie usunelismy
+                        flag = True
+                        break
+                    u, v = stack.pop(), u 
+
+                stack.append(u) 
+                if not flag: 
+                    stack.append(v) #jesli w ostatniej iteracji udało się dodać trojkat, nie dodawaj ostatniego elementu stosu, bo właśnie go "uwieziliśmy" odcinkiem i->u. Jesli sie nie udalo to dodaj zeby wrocic do stanu z przed usuwania
+                stack.append(idxs[idx])
+        
+
 def visualize(mesh, addedDiags):
     fig, ax = plt.subplots()
+    ax.clear()
     xlim = (0,10)
     ylim = (0,10)
     ax.set_xlim(*xlim)
@@ -471,21 +511,17 @@ def visualize(mesh, addedDiags):
     plt.show()
 
 
-if __name__ == "__main__":
-    figure = loadFigure("mirroredmountains.json")
-    points = figure["points"]
-    X, Y = zip(*points)
-    for i in range (len(points)):
-        plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
-    plt.show()
+def triangulate(points):
+    '''
+    param: list of points  
+    return: list of tuples: [(i,j,k): i,j,k indices of points from points in CCW order]
+    '''
     prepare = Structures(points)
     division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
     division.divide()
     division.visualize()
-    facesIdxToRemove = set()
     allDiags = []
     for i, face in enumerate(division.polygon.faces[::]):
-        print(i, face)
         trian = Triangulation(division.polygon, currFace=face)
         if len(trian.vertices) == 3:
             continue
@@ -493,9 +529,63 @@ if __name__ == "__main__":
             trian.algorithm()
             allDiags += trian.addedDiags
             division.polygon.faces.remove(face)
-            print(division.polygon)
-            print(division.polygon.faces)
-    visualize(division.polygon, allDiags)
+                
 
-    division.polygon.faces = list(filter(lambda faceIdx: faceIdx not in facesIdxToRemove, division.polygon.faces))
+if __name__ == "__main__":
+    # for file in Path(r"C:\Users\emilz\geometryczne_projekt\TriangulacjaProjekt\data").iterdir():
+    #     fig, ax = plt.subplots()
+    #     ax.clear()
+    #     figure = loadFigure(file.name)
+    #     points = figure["points"]
+    #     X, Y = zip(*points)
+    #     for i in range (len(points)):
+    #         ax.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
+    #     plt.show(block = True)
+
+    #     prepare = Structures(points)
+    #     division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
+    #     division.divide()
+    #     division.visualize()
+    #     facesIdxToRemove = set()
+    #     allDiags = []
+    #     for i, face in enumerate(division.polygon.faces[::]):
+    #         print(i, face)
+    #         trian = Triangulation(division.polygon, currFace=face)
+    #         if len(trian.vertices) == 3:
+    #             continue
+    #         else:
+    #             trian.algorithm()
+    #             allDiags += trian.addedDiags
+    #             division.polygon.faces.remove(face)
+    #             print(division.polygon)
+    #             print(division.polygon.faces)
+        
+        # visualize(division.polygon, allDiags)
+        # division.polygon.faces = list(filter(lambda faceIdx: faceIdx not in facesIdxToRemove, division.polygon.faces))
+        figure = loadFigure("exportData.json")
+        points = figure["points"]
+        X, Y = zip(*points)
+        for i in range (len(points)):
+            plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
+        plt.show()
+        
+        prepare = Structures(points)
+        division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
+        division.divide()
+        division.visualize()
+        facesIdxToRemove = set()
+        allDiags = []
+        for i, face in enumerate(division.polygon.faces[::]):
+            trian = Triangulation(division.polygon, currFace=face)
+            if len(trian.vertices) == 3:
+                continue
+            else:
+                trian.algorithm()
+                allDiags += trian.addedDiags
+                division.polygon.faces.remove(face)
+                
+        
+        visualize(division.polygon, allDiags)
+     
+        division.polygon.faces = list(filter(lambda faceIdx: faceIdx not in facesIdxToRemove, division.polygon.faces))
     
