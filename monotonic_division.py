@@ -1,6 +1,6 @@
 from pathlib import Path
 from utils.halfedge import HalfEdge, HalfEdgeMesh, Vertex, Face
-from utils import interactive_figure
+from utils import interactive_figure, draw_triangulation
 
 from sortedcontainers import SortedSet 
 from functools import cmp_to_key
@@ -452,7 +452,7 @@ class Triangulation:
 
 
     def appendTriangle(self, el):
-        if self.orient(self.points[el[0]], self.points[el[1]], self.points[el[2]]) == 1: #ujemny wyznacznik, zgodnie ze wskazowkami zegara
+        if self.orient(self.vertices[el[0]], self.vertices[el[1]], self.vertices[el[2]]) == 1: #ujemny wyznacznik, zgodnie ze wskazowkami zegara
             el = (el[0], el[2], el[1])
         self.triangles.append(el)
 
@@ -519,73 +519,48 @@ def triangulate(points):
     prepare = Structures(points)
     division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
     division.divide()
-    division.visualize()
-    allDiags = []
-    for i, face in enumerate(division.polygon.faces[::]):
+    allTriangles = []
+    for face in division.polygon.faces:
         trian = Triangulation(division.polygon, currFace=face)
         if len(trian.vertices) == 3:
             continue
         else:
-            trian.algorithm()
-            allDiags += trian.addedDiags
-            division.polygon.faces.remove(face)
+            trian.algorithmTriangles()
+            #zamieniaj indeksy wewnetrzne algorytmu na indeksy globalne (id z Vertex) za pomocą listy trian.vertices gdzie indeks globalny dla i = trian.vertices[i].id 
+            allTriangles += list(map(lambda innerIdxTuple: tuple(map(lambda innerIdx: trian.vertices[innerIdx].id, innerIdxTuple)), trian.triangles))  
+    return allTriangles
                 
 
 if __name__ == "__main__":
-    # for file in Path(r"C:\Users\emilz\geometryczne_projekt\TriangulacjaProjekt\data").iterdir():
-    #     fig, ax = plt.subplots()
-    #     ax.clear()
-    #     figure = loadFigure(file.name)
-    #     points = figure["points"]
-    #     X, Y = zip(*points)
-    #     for i in range (len(points)):
-    #         ax.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
-    #     plt.show(block = True)
-
-    #     prepare = Structures(points)
-    #     division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
-    #     division.divide()
-    #     division.visualize()
-    #     facesIdxToRemove = set()
-    #     allDiags = []
-    #     for i, face in enumerate(division.polygon.faces[::]):
-    #         print(i, face)
-    #         trian = Triangulation(division.polygon, currFace=face)
-    #         if len(trian.vertices) == 3:
-    #             continue
-    #         else:
-    #             trian.algorithm()
-    #             allDiags += trian.addedDiags
-    #             division.polygon.faces.remove(face)
-    #             print(division.polygon)
-    #             print(division.polygon.faces)
-        
-        # visualize(division.polygon, allDiags)
-        # division.polygon.faces = list(filter(lambda faceIdx: faceIdx not in facesIdxToRemove, division.polygon.faces))
-        figure = loadFigure("exportData.json")
-        points = figure["points"]
-        X, Y = zip(*points)
-        for i in range (len(points)):
-            plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
-        plt.show()
-        
-        prepare = Structures(points)
-        division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
-        division.divide()
-        division.visualize()
-        facesIdxToRemove = set()
-        allDiags = []
-        for i, face in enumerate(division.polygon.faces[::]):
-            trian = Triangulation(division.polygon, currFace=face)
-            if len(trian.vertices) == 3:
-                continue
-            else:
-                trian.algorithm()
-                allDiags += trian.addedDiags
-                division.polygon.faces.remove(face)
-                
-        
-        visualize(division.polygon, allDiags)
-     
-        division.polygon.faces = list(filter(lambda faceIdx: faceIdx not in facesIdxToRemove, division.polygon.faces))
+    # figure = loadFigure("exportData.json")
+    # points = figure["points"]
+    # X, Y = zip(*points)
+    # for i in range (len(points)):
+    #     plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
+    # plt.show()
     
+    # prepare = Structures(points)
+    # division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
+    # division.divide()
+    # division.visualize()
+    # facesIdxToRemove = set()
+    # allDiags = []
+    # for i, face in enumerate(division.polygon.faces[::]):
+    #     trian = Triangulation(division.polygon, currFace=face)
+    #     if len(trian.vertices) == 3:
+    #         continue
+    #     else:
+    #         trian.algorithm()
+    #         allDiags += trian.addedDiags
+    #         # division.polygon.faces.remove(face)
+            
+
+    # visualize(division.polygon, allDiags)
+
+
+
+    figure = loadFigure("exportData.json")
+    points = figure["points"]
+    draw_triangulation.draw(points, triangulate(points))
+
+
