@@ -38,7 +38,7 @@ def onsegment(a, b, p, Eps):
 # -1 when circumcircle (a, b c) doesn't contain p
 #  0 when p lies on circumcircle (a, b c)
 #  1 when p lies inside circumcircle (a, b c)
-def circleTest(a, b, c, p):
+def circumcircleTest(a, b, c, p):
   import numpy as np
 
   matrix = np.array([
@@ -61,6 +61,30 @@ def segmentsIntersect(a, b, c, d):
 # checks if quad is convex
 def quadConvex(a, b, c, d):
   return orientation(a, b, c) == orientation(b, c, d) == orientation(c, d, a) == orientation(d, a, b) == -1
+
+# finds trinagle that contains all points, else returns some arbitrary triangle (used for interactive mode)
+def getBoundingTriangle(points):
+  if len(points) == 0:
+    return Vector(-1000, -1000), Vector(1000, -1000), Vector(0, 1000)
+  minx = points[0].x
+  maxx = points[0].x
+  miny = points[0].x
+  maxy = points[0].x
+  for p in points:
+    minx = min(minx, p.x)
+    maxx = max(maxx, p.x)
+    miny = min(miny, p.y)
+    maxy = max(maxy, p.y)
+
+  cx = (minx + maxx) / 2
+  cy = (miny + maxy) / 2
+  w = maxx - minx
+  h = maxy - miny
+  a = (math.sqrt(3) * 2 / 3) * h + w
+
+  pad = a * 0.1 + 1
+
+  return Vector(cx - a / 2 - pad, miny - pad), Vector(cx + a / 2 + pad, miny - pad), Vector(cx, miny + a * math.sqrt(3) / 2 + pad)
 
 class Face:
   def __init__(self, edge):
@@ -174,30 +198,6 @@ class HalfEdge:
 
     return (e1, e2, e3, e4)
 
-# finds trinagle that contains all points, else returns some arbitrary triangle (used for interactive mode)
-def getBoundingTriangle(points):
-  if len(points) == 0:
-    return Vector(-1000, -1000), Vector(1000, -1000), Vector(0, 1000)
-  minx = points[0].x
-  maxx = points[0].x
-  miny = points[0].x
-  maxy = points[0].x
-  for p in points:
-    minx = min(minx, p.x)
-    maxx = max(maxx, p.x)
-    miny = min(miny, p.y)
-    maxy = max(maxy, p.y)
-
-  cx = (minx + maxx) / 2
-  cy = (miny + maxy) / 2
-  w = maxx - minx
-  h = maxy - miny
-  a = (math.sqrt(3) * 2 / 3) * h + w
-
-  pad = a * 0.1 + 1
-
-  return Vector(cx - a / 2 - pad, miny - pad), Vector(cx + a / 2 + pad, miny - pad), Vector(cx, miny + a * math.sqrt(3) / 2 + pad)
-
 class Mesh:
 
   def __init__(self, vertices):
@@ -272,7 +272,7 @@ class Mesh:
 
   # check if edge is legal
   def isEdgeLegal(self, edge):
-    return circleTest(self.vertices[edge.vertex], self.vertices[edge.next.vertex], self.vertices[edge.next.next.vertex], self.vertices[edge.twin.next.next.vertex]) <= 0
+    return circumcircleTest(self.vertices[edge.vertex], self.vertices[edge.next.vertex], self.vertices[edge.next.next.vertex], self.vertices[edge.twin.next.next.vertex]) <= 0
 
   # makes edge meet delaunay criteria
   def legalizeEdge(self, edge):
@@ -287,13 +287,16 @@ class Mesh:
       if e2.twin:
         self.legalizeEdge(e2.twin)
 
-  # adds vertex on edge and keeps delawunay properties
+  # adds vertex on edge and keeps delaunay properties
   def addVertexToEdgeAndLegalize(self, edge, vertexIndex):
     face1 = edge.face
     face2 = edge.twin.face
 
     e1, e2, e3, e4 = edge.splitEdge(vertexIndex)
-
+    
+    if edge.twin:
+      self.removeEdgeFromSet(edge.twin)
+    self.removeEdgeFromSet(edge)
     self.addEdgeToSet(e1.next)
     self.addEdgeToSet(e1.next.next)
     self.addEdgeToSet(e2.next)
@@ -526,6 +529,23 @@ class Mesh:
     return ans
 
 
+def dt(points, constrains = [], shuffle = False):
+  mesh = Mesh(points)
+
+  indices = [i for i in range(0, len(points) - 3)]
+  if shuffle:
+    random.shuffle(indices)
+  already = set()
+
+  for i in indices:
+    p = points[i]
+    if (p.x, p.y) not in already:
+      already.add((p.x, p.y))
+      face = mesh.locate(p)
+      mesh.addVertexAndLegalize(face, i)  
+    
+  return mesh.toTriangleList(True, False)
+
 def cdt(points, constrains = [], shuffle = False):
   mesh = Mesh(points)
 
@@ -546,5 +566,5 @@ def cdt(points, constrains = [], shuffle = False):
     
   return mesh.toTriangleList(True, len(constrains) > 0)
 
-def triangulatePolygon(points):
-  return cdt(points, [ (i, (i + 1) % len(points)) for i in range(len(points))])
+def triangulatePolygon(points, shuffle = False):
+  return cdt(points, [ (i, (i + 1) % len(points)) for i in range(len(points))], shuffle)
