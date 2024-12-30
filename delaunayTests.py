@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 TestsPath = "delaunayTests/"
 
 
+
 def textScatter(xs, ys, **kwargs):
   # Create a scatter plot
   scatter = plt.scatter(xs, ys, **kwargs)
@@ -39,7 +40,7 @@ def interactive():
           mesh.addVertexAndLegalize(l, len(mesh.vertices) - 1)
 
   def onmoved(event):
-    nonlocal mesh    
+    nonlocal mesh
     plt.clf()
     textScatter([p.x for p in mesh.vertices], [p.y for p in mesh.vertices], color = 'orange')
     t = mesh.toTriangleList(False)
@@ -84,7 +85,7 @@ def test(inpath, outpath):
     figure = json.load(jsonFile)
 
   with open(outpath,"r") as jsonFile2:
-    ansfigure = json.load(jsonFile2)  
+    ansfigure = json.load(jsonFile2)
 
   points = figure["points"]
   constrains = figure["edges"]
@@ -95,7 +96,9 @@ def test(inpath, outpath):
   for i in range(len(got)):
     if got[i] != tuple(correct[i]):
       return False
-  return True  
+  return True
+
+
 
 def tests():
   all = True
@@ -116,7 +119,7 @@ def tests():
   else:
     print("WRONG ANSWERS WERE GIVEN")
 
-def inputPolygon():  
+def inputPolygon():
   interactive_figure.graphing((-10, 10), (-10, 10))
   print("XD?")
 
@@ -124,12 +127,16 @@ def specificTest():
   path = input()
 
   with open(path,"r") as jsonFile:
-    figure = json.load(jsonFile)  
+    figure = json.load(jsonFile)
 
   points = figure["points"]
   constrains = figure["edges"]
 
-  ans = delaunay.cdt([delaunay.Vector(x, y) for x, y in points], constrains)  
+  pointsv = [delaunay.Vector(x, y) for x, y in points]
+  anim = delaunay.DelaunayAnimation(pointsv, True)
+  #anim = delaunay.DelaunayAnimation()
+  ans = delaunay.cdt(pointsv, constrains, False, anim)
+  anim.anim.draw(300)
 
   draw_triangulation.draw(points, ans, constrains)
 

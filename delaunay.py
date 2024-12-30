@@ -3,6 +3,8 @@ import math
 import matplotlib.pyplot as plt
 from collections import deque
 
+import animations
+
 class Vector:
   def __init__(self, x, y):
     self.x = x
@@ -198,13 +200,119 @@ class HalfEdge:
 
     return (e1, e2, e3, e4)
 
+
+
+
+class DelaunayAnimation:
+  def __init__(self, points = [], on = False):
+    self.on = on
+    fig, ax = plt.subplots()
+    self.anim = animations.Animation(fig, ax, "idk")
+    self.points = points
+    self.legalizing = None
+    self.frame = 0
+
+  def gp(self, p):
+    return (self.points[p].x, self.points[p].y)
+
+  def addTriangle(self, e1, e2, e3):
+    p1 = e1.vertex
+    p2 = e2.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p1), self.gp(p2), color='black'))
+    p3 = e2.vertex
+    p4 = e3.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p3), self.gp(p4), color='black'))
+    p5 = e3.vertex
+    p6 = e1.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p5), self.gp(p6), color='black'))
+
+  def constrain(self, p1, p2):
+    if not self.on:
+      return
+    self.frame += 1
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p1), self.gp(p2), color='black'))
+
+  def legalizingEdge(self, edge):
+    if not self.on:
+      return
+    self.frame += 1
+    p1 = edge.vertex
+    p2 = edge.next.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('red', self.anim.find_line_index(self.gp(p1), self.gp(p2))))
+    self.legalizing = (p1, p2)
+
+  def legalized(self, edge):
+    if not self.on:
+      return
+    self.frame += 1
+    p1, p2 = self.legalizing
+    self.anim.addAction(self.frame, lambda : self.anim.deleteLine(self.anim.find_line_index(self.gp(p1), self.gp(p2))))
+
+    p3, p4 = edge.vertex, edge.next.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p3), self.gp(p4), color='green'))
+
+    self.frame += 1
+    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('blue', self.anim.find_line_index(self.gp(p1), self.gp(p2))))
+
+  def addedPoint(self, p):
+    if not self.on:
+      return
+    self.frame += 1
+    self.anim.addAction(self.frame, lambda : self.anim.addPoints([self.gp(p)], color = 'orange'))
+
+  def locatedTriangle(self, edge):
+    if not self.on:
+      return 
+    self.frame += 1
+    p1 = edge.vertex
+    p2 = edge.next.vertex
+    p3 = edge.next.next.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('red', self.anim.find_line_index(self.gp(p1), self.gp(p2))))
+    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('red', self.anim.find_line_index(self.gp(p2), self.gp(p3))))
+    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('red', self.anim.find_line_index(self.gp(p3), self.gp(p1))))
+    self.frame += 1
+    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('blue', self.anim.find_line_index(self.gp(p1), self.gp(p2))))
+    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('blue', self.anim.find_line_index(self.gp(p2), self.gp(p3))))
+    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('blue', self.anim.find_line_index(self.gp(p3), self.gp(p1))))
+
+  def addedToEdge(self, e1, e2, e3, e4):
+    if not self.on:
+      return
+    self.frame += 1
+    p1 = e1.next.vertex
+    p2 = e1.next.next.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p1), self.gp(p2), color='blue'))
+    p3 = e3.next.vertex
+    p4 = e3.next.next.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p3), self.gp(p4), color='blue'))
+
+  def addedToFace(self, e1, e2, e3):
+    if not self.on:
+      return
+    self.frame += 1
+    p1 = e1.next.vertex
+    p2 = e1.next.next.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p1), self.gp(p2), color='blue'))
+    p3 = e2.next.vertex
+    p4 = e2.next.next.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p3), self.gp(p4), color='blue'))
+    p5 = e3.next.vertex
+    p6 = e3.next.next.vertex
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p5), self.gp(p6), color='blue'))
+
+  def addInner(self, edge):
+    if not self.on:
+      return
+    pass
+
 class Mesh:
 
-  def __init__(self, vertices):
+  def __init__(self, vertices, anim = DelaunayAnimation()):
+    self.anim = anim
     self.OnSegmentEpsilon = 10**-6
 
     self.vertices = vertices
-    self.faces = []    
+    self.faces = []
     self.verticesEdges = []
 
     p1, p2, p3 = getBoundingTriangle(vertices)
@@ -224,19 +332,27 @@ class Mesh:
     self.faces.append(Face(e1))
     self.root = 0
 
-    self.constrained = set()  
+    self.constrained = set()
 
-  def removeEdgeFromSet(self, edge):    
+    self.anim.addedPoint(e1.vertex)
+    self.anim.addedPoint(e2.vertex)
+    self.anim.addedPoint(e3.vertex)
+    self.anim.addTriangle(e1, e2, e3)
+    #self.anim.addedEdge(e1)
+    #self.anim.addedEdge(e2)
+    #self.anim.addedEdge(e3)
+
+  def removeEdgeFromSet(self, edge):
     self.verticesEdges[edge.vertex].remove(edge)
-    
-  def addEdgeToSet(self, edge):    
+
+  def addEdgeToSet(self, edge):
     while len(self.verticesEdges) <= edge.vertex:
       self.verticesEdges.append(set())
     self.verticesEdges[edge.vertex].add(edge)
 
   # checks if edge is present in triangulation
   def edgeAlreadyInTriangulation(self, index1, index2):
-    return index2 in self.verticesEdges[index1]    
+    return index2 in self.verticesEdges[index1]
 
   # flips quadritelar diagonal
   def flipEdge(self, edge):
@@ -276,16 +392,20 @@ class Mesh:
 
   # makes edge meet delaunay criteria
   def legalizeEdge(self, edge):
+    self.anim.legalizingEdge(edge)
     if not self.isEdgeLegal(edge):
       e1 = edge.next
       e2 = e1.next
 
-      self.flipEdge(edge)
+      newEdge = self.flipEdge(edge)
+      self.anim.legalized(newEdge)
 
       if e1.twin:
         self.legalizeEdge(e1.twin)
       if e2.twin:
         self.legalizeEdge(e2.twin)
+    else:
+      self.anim.legalized(edge)
 
   # adds vertex on edge and keeps delaunay properties
   def addVertexToEdgeAndLegalize(self, edge, vertexIndex):
@@ -293,7 +413,7 @@ class Mesh:
     face2 = edge.twin.face
 
     e1, e2, e3, e4 = edge.splitEdge(vertexIndex)
-    
+
     if edge.twin:
       self.removeEdgeFromSet(edge.twin)
     self.removeEdgeFromSet(edge)
@@ -332,6 +452,8 @@ class Mesh:
 
     self.faces[face2].children.append(len(self.faces) - 2)
     self.faces[face2].children.append(len(self.faces) - 1)
+
+    self.anim.addedToEdge(e1, e2, e3, e4)
 
     if e1.twin:
       self.legalizeEdge(e1.twin)
@@ -373,6 +495,8 @@ class Mesh:
     self.faces[face].children.append(len(self.faces) - 2)
     self.faces[face].children.append(len(self.faces) - 1)
 
+    self.anim.addedToFace(e1, e2, e3)
+
     if e1.twin:
       self.legalizeEdge(e1.twin)
     if e2.twin:
@@ -382,6 +506,8 @@ class Mesh:
 
   # adds vertex to face and keep delaunay properties
   def addVertexAndLegalize(self, face, vertexIndex):
+    self.anim.addedPoint(vertexIndex)
+
     edge = self.faces[face].edge
     if onsegment(self.vertices[edge.vertex], self.vertices[edge.next.vertex], self.vertices[vertexIndex], self.OnSegmentEpsilon):
       self.addVertexToEdgeAndLegalize(edge, vertexIndex)
@@ -413,6 +539,7 @@ class Mesh:
         assert(False)
       face = next
 
+    self.anim.locatedTriangle(self.faces[face].edge)
     return face
 
   # checks if segments intersect, uses indices instead of vertices
@@ -465,7 +592,7 @@ class Mesh:
         if i1 > i2:
           i1, i2 = i2, i1
         if i1 != index1 and i2 != index2 and segmentsIntersect(self.vertices[e.vertex], self.vertices[e.next.vertex], self.vertices[index1], self.vertices[index2]):
-          intersecting.append(e)          
+          intersecting.append(e)
         elif (min(e.vertex, e.next.vertex), max(e.vertex, e.next.vertex)) != (index1, index2):
           newEdges.append(e)
       else:
@@ -492,7 +619,7 @@ class Mesh:
         if e.next.vertex == i2:
           queue.append(e.face)
           visited[e.face] = True
-          break    
+          break
 
     while queue:
       face = queue.popleft()
@@ -516,7 +643,7 @@ class Mesh:
   # removeOuter: if set to true removes triangles outside of constrained edges - constrained edges must form closed
   # polygons or else it will delete everything, also assumes that interior is on left side of edge
   def toTriangleList(self, filterSuperTriangle, removeOuter = False):
-    ans = []    
+    ans = []
     inside = self.findInner()
 
     for face in range(len(self.faces)):
@@ -542,12 +669,12 @@ def dt(points, constrains = [], shuffle = False):
     if (p.x, p.y) not in already:
       already.add((p.x, p.y))
       face = mesh.locate(p)
-      mesh.addVertexAndLegalize(face, i)  
-    
+      mesh.addVertexAndLegalize(face, i)
+
   return mesh.toTriangleList(True, False)
 
-def cdt(points, constrains = [], shuffle = False):
-  mesh = Mesh(points)
+def cdt(points, constrains = [], shuffle = False, anim = DelaunayAnimation()):
+  mesh = Mesh(points, anim)
 
   indices = [i for i in range(0, len(points) - 3)]
   if shuffle:
@@ -563,7 +690,7 @@ def cdt(points, constrains = [], shuffle = False):
 
   for (i1, i2) in constrains:
     mesh.constrainEdge(i1, i2)
-    
+
   return mesh.toTriangleList(True, len(constrains) > 0)
 
 def triangulatePolygon(points, shuffle = False):

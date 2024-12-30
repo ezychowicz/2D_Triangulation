@@ -54,7 +54,9 @@ class Animation:
         return line1, line2, line3
 
     def addAction(self, frame, action):
-        self.actions[frame] = action
+        if not frame in self.actions:
+            self.actions[frame] = []
+        self.actions[frame].append(action)
 
     def addPoints(self, points, **kwargs):
         if len(points) == 0:
@@ -93,7 +95,9 @@ class Animation:
 
     def update(self, frame):
         if frame in self.actions:
-            self.actions[frame]()  
+            for a in self.actions[frame]:
+                a()
+                #self.actions[frame]()  
 
         return self.ax.collections + self.ax.lines  
 
