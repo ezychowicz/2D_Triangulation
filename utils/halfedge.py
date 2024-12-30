@@ -26,7 +26,7 @@ class HalfEdge:
         self.C = None 
         self.helper = None
         self.CCW = True
-    
+        
     def currX(self):
         if self.A == 0:
             return self.origin.x #zwroc x poczatkowy - pozwoli na rozroznienie miedzy segmentami na tym samym y=k
@@ -100,7 +100,6 @@ class HalfEdgeMesh:
             edge.face = face
             edge.next = edgeCycle[(i + 1) % len(edgeCycle)]  # Następna krawędź w cyklu
             edge.prev = edgeCycle[(i - 1) % len(edgeCycle)]  # Poprzednia krawędź w cyklu
-            print(edge.prev, edge, edge.next)
         # Powiązanie ściany z jedną z jej krawędzi
         face.outerEdge = edgeCycle[0]
 

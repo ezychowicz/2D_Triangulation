@@ -18,7 +18,7 @@ def export_json_triangulation_path(points, triangles, path_to_json):
 def export_json(points, edges):
     data_dir = Path(__file__).parent.parent / "data"
     path_to_json  = data_dir / "exportData.json" #tworzy ścieżkę do jsona pobierając ścieżkę do tego pliku
-    export_json_path(path_to_json)
+    export_json_path(points, edges,path_to_json)
 
 
 class Commit:
