@@ -37,11 +37,11 @@ class Animation:
 
         return None  
 
-    def find_line_index(self, A, B):
+    def find_line_index(self, A, B):        
         for index, collection in enumerate(self.ax.lines):
             if isinstance(collection, plt.Line2D):
                 if list(collection.get_xdata()) == [A[0], B[0]] and list(collection.get_ydata()) == [A[1], B[1]]:
-                    return index
+                    return index                
 
     def addLine(self, A, B, **kwargs):
         line = self.ax.plot([A[0], B[0]], [A[1], B[1]], **kwargs) #,
@@ -93,11 +93,12 @@ class Animation:
             return
         self.ax.lines[index].remove()
 
-    def update(self, frame):
-        if frame in self.actions:
+    def update(self, frame):        
+        if frame in self.actions:            
             for a in self.actions[frame]:
                 a()
                 #self.actions[frame]()  
+            del self.actions[frame]
 
         return self.ax.collections + self.ax.lines  
 

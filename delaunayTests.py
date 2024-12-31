@@ -26,7 +26,6 @@ def interactive():
 
   mesh = delaunay.Mesh([])
 
-
   def onclick(event):
     nonlocal mesh
 
@@ -136,7 +135,7 @@ def specificTest():
   anim = delaunay.DelaunayAnimation(pointsv, True)
   #anim = delaunay.DelaunayAnimation()
   ans = delaunay.cdt(pointsv, constrains, False, anim)
-  anim.anim.draw(300)
+  anim.anim.draw(100)
 
   draw_triangulation.draw(points, ans, constrains)
 

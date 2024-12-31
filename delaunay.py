@@ -206,99 +206,102 @@ class HalfEdge:
 class DelaunayAnimation:
   def __init__(self, points = [], on = False):
     self.on = on
+    self.skip = False
     fig, ax = plt.subplots()
     self.anim = animations.Animation(fig, ax, "idk")
     self.points = points
     self.legalizing = None
     self.frame = 0
+    self.constrained = set()
 
   def gp(self, p):
     return (self.points[p].x, self.points[p].y)
 
+  def nextFrame(self):
+    if not self.skip:
+      self.frame += 1
+
+  def addLine(self, p1, p2, c):    
+    p1, p2 = min(p1, p2), max(p1, p2)
+    if (p1, p2) in self.constrained:
+      return
+    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p1), self.gp(p2), color=c))
+
+  def deleteLine(self, p1, p2):
+    p1, p2 = min(p1, p2), max(p1, p2)
+    self.anim.addAction(self.frame, lambda : self.anim.deleteLine(self.anim.find_line_index(self.gp(p1), self.gp(p2))))
+
+  def setLineColor(self, p1, p2, color):
+    p1, p2 = min(p1, p2), max(p1, p2)
+    if (p1, p2) in self.constrained:
+      return
+    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor(color, self.anim.find_line_index(self.gp(p1), self.gp(p2))))
+
   def addTriangle(self, e1, e2, e3):
-    p1 = e1.vertex
-    p2 = e2.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p1), self.gp(p2), color='black'))
-    p3 = e2.vertex
-    p4 = e3.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p3), self.gp(p4), color='black'))
-    p5 = e3.vertex
-    p6 = e1.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p5), self.gp(p6), color='black'))
+    self.addLine(e1.vertex, e2.vertex, 'blue')
+    self.addLine(e2.vertex, e3.vertex, 'blue')
+    self.addLine(e3.vertex, e1.vertex, 'blue')
+
+  def triangleOut(self, edge):
+    self.nextFrame()
+    self.setLineColor(edge.vertex, edge.next.vertex, 'cyan')
+    self.setLineColor(edge.next.vertex, edge.next.next.vertex, 'cyan')
+    self.setLineColor(edge.next.next.vertex, edge.next.next.next.vertex, 'cyan')
 
   def constrain(self, p1, p2):
     if not self.on:
       return
-    self.frame += 1
-    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p1), self.gp(p2), color='black'))
+    self.nextFrame()
+    p1, p2 = min(p1, p2), max(p1, p2)    
+    self.addLine(p1, p2, 'black')
+    self.constrained.add((p1, p2))
 
-  def legalizingEdge(self, edge):
+  def flip(self, e1, e2):
     if not self.on:
       return
-    self.frame += 1
-    p1 = edge.vertex
-    p2 = edge.next.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('red', self.anim.find_line_index(self.gp(p1), self.gp(p2))))
-    self.legalizing = (p1, p2)
-
-  def legalized(self, edge):
-    if not self.on:
-      return
-    self.frame += 1
-    p1, p2 = self.legalizing
-    self.anim.addAction(self.frame, lambda : self.anim.deleteLine(self.anim.find_line_index(self.gp(p1), self.gp(p2))))
-
-    p3, p4 = edge.vertex, edge.next.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p3), self.gp(p4), color='green'))
-
-    self.frame += 1
-    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('blue', self.anim.find_line_index(self.gp(p1), self.gp(p2))))
+    self.nextFrame()
+    self.setLineColor(e1.vertex, e1.next.vertex, 'red')
+    self.nextFrame()
+    self.deleteLine(e1.vertex, e1.next.vertex)
+    self.addLine(e2.vertex, e2.next.vertex, 'green')
+    self.nextFrame()
+    self.setLineColor(e2.vertex, e2.next.vertex, 'blue')
 
   def addedPoint(self, p):
     if not self.on:
       return
-    self.frame += 1
+    self.nextFrame()
     self.anim.addAction(self.frame, lambda : self.anim.addPoints([self.gp(p)], color = 'orange'))
 
   def locatedTriangle(self, edge):
     if not self.on:
-      return 
-    self.frame += 1
+      return
+    self.nextFrame()
     p1 = edge.vertex
     p2 = edge.next.vertex
     p3 = edge.next.next.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('red', self.anim.find_line_index(self.gp(p1), self.gp(p2))))
-    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('red', self.anim.find_line_index(self.gp(p2), self.gp(p3))))
-    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('red', self.anim.find_line_index(self.gp(p3), self.gp(p1))))
-    self.frame += 1
-    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('blue', self.anim.find_line_index(self.gp(p1), self.gp(p2))))
-    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('blue', self.anim.find_line_index(self.gp(p2), self.gp(p3))))
-    self.anim.addAction(self.frame, lambda : self.anim.changeLineColor('blue', self.anim.find_line_index(self.gp(p3), self.gp(p1))))
+    self.setLineColor(p1, p2, 'red')
+    self.setLineColor(p2, p3, 'red')
+    self.setLineColor(p3, p1, 'red')
+    self.nextFrame()
+    self.setLineColor(p1, p2, 'blue')
+    self.setLineColor(p2, p3, 'blue')
+    self.setLineColor(p3, p1, 'blue')
 
   def addedToEdge(self, e1, e2, e3, e4):
     if not self.on:
       return
-    self.frame += 1
-    p1 = e1.next.vertex
-    p2 = e1.next.next.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p1), self.gp(p2), color='blue'))
-    p3 = e3.next.vertex
-    p4 = e3.next.next.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p3), self.gp(p4), color='blue'))
+    self.nextFrame()
+    self.addLine(e1.next.vertex, e1.next.next.vertex, 'blue')
+    self.addLine(e3.next.vertex, e3.next.next.vertex, 'blue')
 
   def addedToFace(self, e1, e2, e3):
     if not self.on:
       return
-    self.frame += 1
-    p1 = e1.next.vertex
-    p2 = e1.next.next.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p1), self.gp(p2), color='blue'))
-    p3 = e2.next.vertex
-    p4 = e2.next.next.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p3), self.gp(p4), color='blue'))
-    p5 = e3.next.vertex
-    p6 = e3.next.next.vertex
-    self.anim.addAction(self.frame, lambda : self.anim.addLine(self.gp(p5), self.gp(p6), color='blue'))
+    self.nextFrame()
+    self.addLine(e1.next.vertex, e1.next.next.vertex, 'blue')
+    self.addLine(e2.next.vertex, e2.next.next.vertex, 'blue')
+    self.addLine(e3.next.vertex, e3.next.next.vertex, 'blue')
 
   def addInner(self, edge):
     if not self.on:
@@ -309,6 +312,8 @@ class Mesh:
 
   def __init__(self, vertices, anim = DelaunayAnimation()):
     self.anim = anim
+    self.anim.skip = True
+
     self.OnSegmentEpsilon = 10**-6
 
     self.vertices = vertices
@@ -384,6 +389,7 @@ class Mesh:
     self.faces[face2].addChild(newEdge.face)
     self.faces[face2].addChild(newEdge.twin.face)
 
+    self.anim.flip(edge, newEdge)
     return newEdge
 
   # check if edge is legal
@@ -392,20 +398,16 @@ class Mesh:
 
   # makes edge meet delaunay criteria
   def legalizeEdge(self, edge):
-    self.anim.legalizingEdge(edge)
     if not self.isEdgeLegal(edge):
       e1 = edge.next
       e2 = e1.next
 
       newEdge = self.flipEdge(edge)
-      self.anim.legalized(newEdge)
 
       if e1.twin:
         self.legalizeEdge(e1.twin)
       if e2.twin:
         self.legalizeEdge(e2.twin)
-    else:
-      self.anim.legalized(edge)
 
   # adds vertex on edge and keeps delaunay properties
   def addVertexToEdgeAndLegalize(self, edge, vertexIndex):
@@ -574,6 +576,9 @@ class Mesh:
 
   # constrains edge
   def constrainEdge(self, index1, index2):
+    self.anim.skip = False
+    self.anim.constrain(index1, index2)
+
     self.constrained.add((index1, index2))
     index1, index2 = (min(index1, index2), max(index1, index2))
     if self.edgeAlreadyInTriangulation(index1, index2):
@@ -624,6 +629,7 @@ class Mesh:
     while queue:
       face = queue.popleft()
       visited[face] = True
+      self.anim.triangleOut(self.faces[face].edge)
 
       edges = [self.faces[face].edge, self.faces[face].edge.next, self.faces[face].edge.next.next]
 
