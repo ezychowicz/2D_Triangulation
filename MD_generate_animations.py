@@ -6,7 +6,7 @@ from sortedcontainers import SortedSet
 from functools import cmp_to_key
 import matplotlib.pyplot as plt
 import json
-
+import animations
 import sys
 
 
@@ -195,18 +195,49 @@ class Division:
         self.addedDiags = set()
         self.polygonCopy = deepcopy(self.polygon)
         self.dictionary = self.initializeDict()
+        self.fig, self.ax = plt.subplots()
+        xlim = (0,10)
+        ylim = (0,10)
+        self.ax.set_xlim(*xlim)
+        self.ax.set_ylim(*ylim)
+        self.anim = animations.Animation(self.fig, self.ax, 'test')
+        self.frame = 10
     def initializeDict(self):
         d = dict()
         for i,edge in enumerate(self.polygon.edges):
             d[edge] = self.polygonCopy.edges[i] 
         return d
-    def originalToCopy(self, originalEdge):
-        return self.dictionary[originalEdge]
     
+    def addToTStructureAnim(self, halfedge):
+        self.anim.addAction(self.frame, lambda line = halfedge: self.anim.changeLineColor('lightgreen', self.anim.find_line_index((line.origin.x, line.origin.y), (line.twin.origin.x, line.twin.origin.y))))
+        self.frame += 2
+
+    def deleteFromTStructureAnim(self, halfedge):
+        self.anim.addAction(self.frame, lambda line = halfedge: self.anim.changeLineColor('blue', self.anim.find_line_index((line.origin.x, line.origin.y), (line.twin.origin.x, line.twin.origin.y))))
+        self.frame += 2
+        self.removeAsHelperAnim(halfedge.helper)
+    def setAsHelperAnim(self, v):
+        self.anim.addAction(self.frame, lambda pt = [v.x, v.y]: self.anim.addPoints([pt], color = 'cyan', s= 50))
+        self.frame += 2
+
+    def removeAsHelperAnim(self, v):
+        if v is None:
+            return
+        self.anim.addAction(self.frame, lambda pt = [v.x, v.y]: self.anim.deletePoints(self.anim.find_scatter_index([pt])))
+        self.frame += 2
+
+    def addDiagonalAnim(self, start, end):
+        self.anim.addAction(self.frame, lambda start = (start.x, start.y), end = (end.x, end.y): self.anim.addLine(start,end, color = 'orange', alpha = 0.5))
+        self.frame += 2
+
     def handleStartVertex(self, v):
         toAdd = v.outgoingEdge
         toAdd.helper = v
+
+        
         self.T.add(toAdd)
+
+        self.addToTStructureAnim(toAdd)
 
     def handleEndVertex(self, v):
         prevEdge = v.outgoingEdge.prev
@@ -214,17 +245,34 @@ class Division:
             prevEdgeHelperD = self.polygonCopy.vertices[prevEdge.helper.id]
             vD = self.polygonCopy.vertices[v.id]
             self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, prevEdgeHelperD)) #tylko tu musi byc ta oryginalna
+
+            self.addDiagonalAnim(vD, prevEdgeHelperD)
+
         self.T.discard(prevEdge)
-        
+
+        self.deleteFromTStructureAnim(prevEdge)
+
     def handleSplitVertex(self, v):
         e = v.outgoingEdge
+
+        self.removeAsHelperAnim(e.helper)
         e.helper = v
+        self.setAsHelperAnim(v)
+
         self.T.add(e)
+
+        self.addToTStructureAnim(e)
+        
         left = self.T[self.T.index(e) - 1] #na lewo od e_{i}, na pewno nalezy do T bo dodalem dopiero
         leftHelperD = self.polygonCopy.vertices[left.helper.id]
         vD = self.polygonCopy.vertices[v.id]
         self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, leftHelperD))
+
+        self.addDiagonalAnim(vD, leftHelperD)
+
+        self.removeAsHelperAnim(left.helper)
         left.helper = v
+        self.setAsHelperAnim(v)
 
     def handleMergeVertex(self, v):
         second = False
@@ -233,15 +281,25 @@ class Division:
             prevEdgeHelperD = self.polygonCopy.vertices[prevEdge.helper.id]
             vD = self.polygonCopy.vertices[v.id]
             self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, prevEdgeHelperD))
+
+            self.addDiagonalAnim(vD, prevEdgeHelperD)
+
             second = True 
         left = self.T[self.T.index(prevEdge) - 1] #na lewo od e_{i-1}, na pewno w T bo jest przy lewym przbu
         self.T.discard(prevEdge)
+
+        self.deleteFromTStructureAnim(prevEdge)
+
         if left.helper.type == 'M':
             leftHelperD = self.polygonCopy.vertices[left.helper.id]
             vD = self.polygonCopy.vertices[v.id]
             self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, leftHelperD, second))
+
+            self.addDiagonalAnim(vD, leftHelperD)
+
+        self.removeAsHelperAnim(left.helper)
         left.helper = v
-        
+        self.setAsHelperAnim(v)
     
     def handleRegularVertex(self, v):
         if v.type == 'RL': #intP po prawej    
@@ -251,9 +309,18 @@ class Division:
                 prevEdgeHelperD = self.polygonCopy.vertices[prevEdge.helper.id]
                 vD = self.polygonCopy.vertices[v.id]                
                 self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, prevEdgeHelperD))
+
+                self.addDiagonalAnim(vD, prevEdgeHelperD)
+
             self.T.discard(prevEdge)
+
+            self.deleteFromTStructureAnim(prevEdge)
+
             v.outgoingEdge.helper = v
             self.T.add(v.outgoingEdge)
+
+            self.addToTStructureAnim(v.outgoingEdge)
+
         else:
             probe = v.outgoingEdge 
             self.T.add(probe) #puszczamy sonde
@@ -263,7 +330,12 @@ class Division:
                 leftHelperD = self.polygonCopy.vertices[left.helper.id]
                 vD = self.polygonCopy.vertices[v.id]
                 self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, leftHelperD))
+
+                self.addDiagonalAnim(vD, leftHelperD)
+
+            self.removeAsHelperAnim(left.helper)
             left.helper = v
+            self.setAsHelperAnim(v)
 
     def createAdjacentFaces(self, diag, visited):
         if not visited[diag]:
@@ -309,14 +381,36 @@ class Division:
                 self.createAdjacentFaces(diag, visited)
 
     def divide(self):
+        # narysuj wielokąt bez niczego na razie 
+        points = list(map(lambda vertex: (vertex.x, vertex.y), self.polygon.vertices))
+        X, Y = zip(*points)
+        for i in range (len(points)):
+            self.ax.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]], color = 'blue')
+        #
+    
+        mergeOrSplits = [p for i, p in enumerate(points) if self.polygon.vertices[i].type in ('M', 'S')]
+        X, Y = zip(*mergeOrSplits)
+        plt.scatter(X,Y, color = 'red', s =40)
+        points = [p for i, p in enumerate(points) if self.polygon.vertices[i].type not in ('M', 'S')]
+        
+        X, Y = zip(*points)
+        self.ax.scatter(X, Y, color = 'orange')
         handle = {'M': self.handleMergeVertex, 'S': self.handleSplitVertex, 'I': self.handleStartVertex, 'RL': self.handleRegularVertex, 'RR': self.handleRegularVertex, 'E': self.handleEndVertex}
+
         while self.Q:
             event = self.Q.pop()
+            self.anim.addAction(self.frame, lambda: self.anim.deleteLine(self.anim.find_axhline_index()))
+            self.frame += 2
+            self.anim.addAction(self.frame, lambda k = event.y: self.anim.addSweepLine(k, color = 'red'))
+            self.frame += 2 
             print(event.type)
             HalfEdge.currY = event.y
             func = handle[event.type]
             func(event)
+        self.anim.addAction(self.frame, lambda: self.anim.deleteLine(self.anim.find_axhline_index()))
+        self.frame += 2
         self.updateFaces()
+        # self.anim.draw(75)
         return self.polygonCopy
 
     def visualize(self):
@@ -343,14 +437,18 @@ class Triangulation:
     Pozostałe funkcje są pomocnicze.
     '''
 
-    def __init__(self, mesh, currFace, eps = 10**(-12)):
+    def __init__(self, mesh, fig, ax, anim, frame ,currFace,eps = 10**(-12) ):
         self.mesh = mesh
         self.eps = eps
         self.currFace = currFace
         self.vertices = self.mesh.extractFaceVertices(currFace)
+        self.points = list(map(lambda vertex: (vertex.x, vertex.y), self.vertices))
         self.left = [True]*(len(self.vertices))
         self.addedDiags = []
         self.triangles = []
+        self.fig, self.ax = fig, ax
+        self.anim =anim
+        self.frame = frame + 10
     def branches(self): 
         '''
         Dzieli na lewą i prawą gałąź - do prawej należy najniższy punkt, do lewej najwyższy.
@@ -421,111 +519,90 @@ class Triangulation:
     #     leftIdxs, rightIdxs = self.branches()
     #     idxs = sorted(leftIdxs + rightIdxs, key = lambda idx: (-self.vertices[idx].y, self.vertices[idx].x))
     #     return idxs
-
-
-    def algorithm(self):
-        '''
-        GŁÓWNY ALGORYTM TRIANGULACJI. Tworzy trójkąty i zapisuje je do listy w kolejności ccw.
-        '''
-        N = len(self.vertices)
-        self.branches()
-        idxs = self.mergeBranches() #posortowana wzgledem y lista indeksów
-        
-        stack = [idxs[0], idxs[1]]
-        for idx in range (2, N):
-            if self.left[idxs[idx]] != self.left[stack[-1]]: #jeśli łańcuchy różne
-                first = stack.pop()
-                u = stack.pop()
-                if abs(idxs[idx] - first) != N - 1 and abs(idxs[idx] - first) != 1:
-                    # self.addedDiags.append((idxs[idx], first))
-                    self.addedDiags.append((self.vertices[idxs[idx]], self.vertices[first]))
-                    # self.updateMesh(idxs[idx], first)
-                while stack:
-                    u,v = stack.pop(), u
-                    if abs(idxs[idx] - v) != N - 1 and abs(idxs[idx] - v) != 1:  #żeby nie dodawał gdy to jest bok
-                        # self.addedDiags.append((idxs[idx], v))
-                        self.addedDiags.append((self.vertices[idxs[idx]], self.vertices[v]))
-                        # self.updateMesh(idxs[idx], v)
-                stack.append(first)
-                stack.append(idxs[idx])
-            else:
-                flag = False
-                v = stack.pop() 
-                u = stack.pop() 
-                while self.inside(idxs[idx], v, u): 
-                    if abs(idxs[idx] - u) != N - 1 and abs(idxs[idx] - u) != 1:
-                        # self.addedDiags.append((idxs[idx], u))
-                        self.addedDiags.append((self.vertices[idxs[idx]], self.vertices[u]))
-                        # self.updateMesh(idxs[idx], u)
-                    if not stack: #jesli skonczyl sie stack to nic nadmiarowego nie usunelismy
-                        flag = True
-                        break
-                    u, v = stack.pop(), u 
-
-                stack.append(u) 
-                if not flag: 
-                    stack.append(v) 
-                stack.append(idxs[idx])
-
-
-    def appendTriangle(self, el):
-        if self.orient(self.vertices[el[0]], self.vertices[el[1]], self.vertices[el[2]]) == 1: #ujemny wyznacznik, zgodnie ze wskazowkami zegara
-            el = (el[0], el[2], el[1])
-        self.triangles.append(el)
-
+    def addToStackAnim(self,idx):
+        self.anim.addAction(self.frame, lambda p1 = self.points[idx]: self.anim.addPoints([p1], color = 'green'))
+        self.frame += 2
+    def popFromStackAnim(self, idx):
+        self.anim.addAction(self.frame, lambda p1 = self.points[idx]: self.anim.deletePoints(self.anim.find_scatter_index([p1])))
+        self.frame += 2
     def algorithmTriangles(self):
         '''
         GŁÓWNY ALGORYTM TRIANGULACJI. Tworzy trójkąty i zapisuje je do listy w kolejności ccw.
         '''
+        
         N = len(self.vertices)
         self.branches()
         idxs = self.mergeBranches() #posortowana wzgledem y lista indeksów
         
-        
+        self.anim.addAction(self.frame, lambda points = self.points: self.anim.fill_polygon_ccw(points))
+       
+        self.frame += 2
+
         stack = [idxs[0], idxs[1]]
         for idx in range (2, N):
             if self.left[idxs[idx]] != self.left[stack[-1]]: #jeśli łańcuchy różne
                 first = stack.pop()
                 u = stack.pop()
-                self.appendTriangle((idxs[idx], u, first)) 
+
+                self.popFromStackAnim(first)
+                self.popFromStackAnim(u)
+                self.anim.addAction(self.frame, lambda p1 = self.points[idxs[idx]], p2 = self.points[u], p3 = self.points[first]: self.anim.addPoints([p1, p2, p3], color = 'red'))
+                self.frame += 2
+                self.anim.addAction(self.frame, lambda p1 = self.points[idxs[idx]], p2 = self.points[u], p3 = self.points[first]: self.anim.addTriangleLines(p1, p2, p3, color = 'red'))
+                self.frame += 2
                 while stack:
                     u,v = stack.pop(), u
-                    self.appendTriangle((idxs[idx], u, v))
+
+                    self.popFromStackAnim(u)
+            
+                    self.anim.addAction(self.frame, lambda p1 = self.points[idxs[idx]], p2 = self.points[u], p3 = self.points[v]: self.anim.addPoints([p1, p2, p3], color = 'red'))
+                    self.frame += 2
+                    self.anim.addAction(self.frame, lambda p1 = self.points[idxs[idx]], p2 = self.points[u], p3 = self.points[v]: self.anim.addTriangleLines(p1,p2,p3, color = 'red'))
+                    self.frame += 2
                 stack.append(first)
                 stack.append(idxs[idx])
+
+                self.addToStackAnim(first)
+                self.addToStackAnim(idxs[idx])
+                
             else:
                 flag = False
-                v = stack.pop() 
+                v = stack.pop() #ten po stronie idxsa
                 u = stack.pop() 
-                while self.inside(idxs[idx], v, u): 
-                    self.appendTriangle((idxs[idx], u, v))
-                    if not stack: #jesli skonczył sie stack to nic nadmiarowego nie usunelismy
+                self.popFromStackAnim(v)
+                
+                self.popFromStackAnim(u)
+                
+                while self.inside(idxs[idx], v, u):
+                    self.anim.addAction(self.frame, lambda p1 = self.points[idxs[idx]], p2 = self.points[u], p3 = self.points[v]: self.anim.addPoints([p1, p2, p3], color = 'red'))
+                    self.frame += 2
+                    self.anim.addAction(self.frame, lambda p1 = self.points[idxs[idx]], p2 = self.points[u], p3 = self.points[v]: self.anim.addTriangleLines(p1,p2,p3, color = 'red'))
+                    self.frame += 2
+                    if not stack: #jesli skonczyl sie stack to nic nadmiarowego nie usunelismy
                         flag = True
                         break
-                    u, v = stack.pop(), u 
+                    u, v = stack.pop(), u
 
+                    self.popFromStackAnim(u)
                 stack.append(u) 
+                self.addToStackAnim(u)
+
                 if not flag: 
                     stack.append(v) #jesli w ostatniej iteracji udało się dodać trojkat, nie dodawaj ostatniego elementu stosu, bo właśnie go "uwieziliśmy" odcinkiem i->u. Jesli sie nie udalo to dodaj zeby wrocic do stanu z przed usuwania
+                    
+                    self.addToStackAnim(v)
+                
                 stack.append(idxs[idx])
+                self.addToStackAnim(idxs[idx])
+                
+        self.frame += 2
+        while stack:
+            u = stack.pop()
+            self.popFromStackAnim(u)
+            
+            self.anim.addAction(self.frame, lambda p1 = self.points[u]: self.anim.addPoints([p1], color = 'red'))
+            self.frame += 2
         
-
-def visualize(mesh, addedDiags):
-    fig, ax = plt.subplots()
-    ax.clear()
-    xlim = (0,10)
-    ylim = (0,10)
-    ax.set_xlim(*xlim)
-    ax.set_ylim(*ylim)
-    edgeSet = set()
-    for edge in mesh.edges:
-        if edge not in edgeSet and edge.twin not in edgeSet:
-            edgeSet.add(edge)
-    pts = [(edge.origin, edge.twin.origin) for edge in edgeSet]
-    pts += addedDiags
-    for pair in pts:
-        ax.plot((pair[0].x, pair[1].x), (pair[0].y, pair[1].y))
-    plt.show()
 
 
 def triangulate(points):
@@ -537,50 +614,24 @@ def triangulate(points):
     division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
     division.divide()
     allTriangles = []
+    prevframe = division.frame
     for face in division.polygonCopy.faces:
-        trian = Triangulation(division.polygonCopy, currFace=face)
+        trian = Triangulation(division.polygonCopy, division.fig, division.ax, division.anim, prevframe, currFace=face)
         if len(trian.vertices) == 3:
             allTriangles += [(trian.vertices[0].id, trian.vertices[1].id, trian.vertices[2].id)]
-        
+            trian.anim.addAction(trian.frame, lambda p1 = trian.points[0], p2 = trian.points[0], p3 = trian.points[0]: trian.anim.addTriangleLines(p1,p2,p3, color = 'red'))
+            trian.frame += 2
         else:
             trian.algorithmTriangles()
             #zamieniaj indeksy wewnetrzne algorytmu na indeksy globalne (id z Vertex) za pomocą listy trian.vertices gdzie indeks globalny dla i = trian.vertices[i].id 
             allTriangles += list(map(lambda innerIdxTuple: tuple(map(lambda innerIdx: trian.vertices[innerIdx].id, innerIdxTuple)), trian.triangles))
+        prevframe = trian.frame + 3
     print(len(allTriangles)) 
+    division.anim.draw(150)
     return allTriangles
                 
-
 if __name__ == "__main__":
-    figure = loadFigure("exportData.json")
+    figure = loadFigure("niedziala.json")
     points = figure["points"]
-    X, Y = zip(*points)
-    for i in range (len(points)):
-        plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
-    plt.show()
-    
-    prepare = Structures(points)
-    division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
-    division.divide()
-    division.visualize()
-    facesIdxToRemove = set()
-    allDiags = []
-    for i, face in enumerate(division.polygonCopy.faces[::]):
-        print(i, face)
-        trian = Triangulation(division.polygonCopy, currFace=face)
-        if len(trian.vertices) == 3:
-            continue
-        else:
-            trian.algorithm()
-            allDiags += trian.addedDiags
-            # division.polygon.faces.remove(face)
-    # print(allDiags)
-
-    visualize(division.polygonCopy, allDiags)
-
-
-
-    # figure = loadFigure("fikusny.json")
-    # points = figure["points"]
-    # draw_triangulation.draw(points, triangulate(points))
-
+    triangulate(points)
 

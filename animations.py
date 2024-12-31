@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.patches import Polygon
+from matplotlib.collections import PatchCollection
 import numpy as np
 import matplotlib.collections
 from pathlib import Path
@@ -36,17 +38,46 @@ class Animation:
                     return index 
 
         return None  
+    
+    def find_axhline_index(self):
+        for index, line in enumerate(self.ax.lines):
+            if isinstance(line, plt.Line2D):
+                ydata = line.get_ydata()
+                if len(ydata) == 2 and ydata[0] == ydata[1]:  # Sprawdza poziomą linię
+                    return index
+        return None
 
+    def addSweepLine(self, k, **kwargs):
+        sweep = self.ax.axhline(y=k, **kwargs)
+        return sweep
+    
     def find_line_index(self, A, B):
         for index, collection in enumerate(self.ax.lines):
             if isinstance(collection, plt.Line2D):
                 if list(collection.get_xdata()) == [A[0], B[0]] and list(collection.get_ydata()) == [A[1], B[1]]:
                     return index
 
+
     def addLine(self, A, B, **kwargs):
         line = self.ax.plot([A[0], B[0]], [A[1], B[1]], **kwargs) #,
         return line 
-    
+ 
+    def fill_polygon_ccw(self,points, color='lightgreen'):
+        """
+        Wypełnia wielokąt ograniczony przez punkty podane w kolejności CCW.
+        
+        Parameters:
+        - points (list of tuples): Lista punktów [(x1, y1), (x2, y2), ...] definiująca wielokąt.
+        - color (str): Kolor wypełnienia (domyślnie 'lightgreen').
+        """
+
+        # Tworzenie wielokąta i dodanie go do osi
+        polygon = Polygon(points, closed=True, edgecolor='black', alpha = 0.5)
+        self.ax.add_patch(polygon)
+
+        # Wypełnienie wielokąta
+        polygon.set_facecolor(color)
+
     def addTriangleLines(self, A, B, C, **kwargs):
         line1 = self.addLine(A, B, **kwargs)
         line2 = self.addLine(B, C, **kwargs)
