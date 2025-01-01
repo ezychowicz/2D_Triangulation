@@ -57,7 +57,46 @@ class HalfEdgeMesh:
         self.vertices = vertices  # Lista wszystkich wierzchołków
         self.edges = edges  # Lista wszystkich krawędzi (HalfEdge)
         self.faces = faces  # Lista wszystkich ścian (Face)
+    # def deepcopy(self):
+    #     # Tworzymy nowe wierzchołki, kopiując dane każdego wierzchołka
+    #     new_vertices = [Vertex(v.x, v.y, v.id) for v in self.vertices]
 
+    #     # Tworzymy nowe krawędzie, zachowując struktury związane z wierzchołkami
+    #     new_edges = [None] * len(self.edges)  # Tworzymy listę krawędzi o takiej samej długości
+        
+    #     for i, edge in enumerate(self.edges):
+    #         # Tworzymy nową krawędź
+    #         new_edge = HalfEdge()
+            
+    #         # Nowy wierzchołek dla tej krawędzi
+    #         new_edge.origin = new_vertices[edge.origin.id]  # Powiązanie z nowym wierzchołkiem
+            
+    #         # Zachowujemy krawędź w odpowiednim miejscu w nowej liście
+    #         new_edges[i] = new_edge
+
+    #         # Przypisujemy krawędzi powiązanie z krawędzią bliźniaczą
+    #         if edge.twin:
+    #             # Indeks krawędzi twin w oryginalnej liście będzie wskazywał na nową krawędź w nowej liście
+    #             new_edge.twin = new_edges[self.edges.index(edge.twin)] if edge.twin in self.edges else None
+            
+    #         # Przypisujemy krawędzi powiązanie z krawędzią następną
+    #         if edge.next:
+    #             new_edge.next = new_edges[self.edges.index(edge.next)] if edge.next in self.edges else None
+            
+    #         # Przypisujemy krawędzi powiązanie z krawędzią poprzednią
+    #         if edge.prev:
+    #             new_edge.prev = new_edges[self.edges.index(edge.prev)] if edge.prev in self.edges else None
+        
+    #     # Tworzymy nowe ściany, kopiując odpowiednie krawędzie
+    #     new_faces = []
+    #     for face in self.faces:
+    #         new_face = Face()
+    #         new_face.outerEdge = new_edges[self.edges.index(face.outerEdge)] if face.outerEdge else None
+    #         new_faces.append(new_face)
+
+    #     # Zwracamy nową, głęboko skopiowaną siatkę HalfEdge
+    #     new_mesh = HalfEdgeMesh(vertices=new_vertices, faces=new_faces, edges=new_edges)
+    #     return new_mesh
     def addVertex(self, x, y):
         vertex = Vertex(x, y)
         self.vertices.append(vertex)
@@ -158,7 +197,7 @@ class HalfEdgeMesh:
         v1.outgoingEdge = new
         if v2.type != "S":
             v2.outgoingEdge = newTwin
-            if v1.type == 'M':
+            if v1.type == 'M' or v1.type == 'RL' or v1.type == 'RR':
                 if v1.x < v2.x:
                     v1.outgoingEdge.CCW = False
                 else:

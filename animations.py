@@ -26,6 +26,9 @@ class Animation:
         self.ax = ax
         self.actions = {}
         self.setName = setName
+        self.animation = None  # Pole do przechowywania obiektu FuncAnimation
+        self.is_running = True  # Flaga kontrolująca stan animacji
+
     def find_scatter_index(self, points):
         if len(points) == 0:
             return
@@ -39,11 +42,12 @@ class Animation:
 
         return None  
     
-    def find_axhline_index(self):
+    def find_axhline_index(self, target_color):
         for index, line in enumerate(self.ax.lines):
             if isinstance(line, plt.Line2D):
                 ydata = line.get_ydata()
-                if len(ydata) == 2 and ydata[0] == ydata[1]:  # Sprawdza poziomą linię
+                line_color = line.get_color()  # Pobiera kolor linii
+                if len(ydata) == 2 and ydata[0] == ydata[1] and line_color == target_color:
                     return index
         return None
 
@@ -132,12 +136,27 @@ class Animation:
 
         return self.ax.collections + self.ax.lines  
 
+    def on_click(self, event):
+        """
+        Funkcja obsługująca zdarzenie kliknięcia. Zatrzymuje lub wznawia animację.
+        """
+        if self.animation is None:
+            return  # Jeśli animacja jeszcze nie została utworzona
+        if self.is_running:
+            self.animation.event_source.stop()
+            self.is_running = False
+        else:
+            self.animation.event_source.start()
+            self.is_running = True
+
+
     def draw(self, frameTime,saveGIF = False):
         framesCnt = max(self.actions.keys())
-        ani = animation.FuncAnimation(self.fig, self.update, frames=framesCnt + 100, interval=frameTime, repeat=False,blit=False)
+        self.animation = animation.FuncAnimation(self.fig, self.update, frames=framesCnt + 100, interval=frameTime, repeat=False,blit=False)
+        self.fig.canvas.mpl_connect('button_press_event', self.on_click)
         if not saveGIF:
             plt.show(block = True)
         if saveGIF:
             path = Path(__file__).parent/f"{self.setName}.gif" 
-            ani.save(path, writer = 'pillow', fps = 1000/frameTime)
+            self.animation.save(path, writer = 'pillow', fps = 1000/frameTime)
         

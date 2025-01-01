@@ -6,11 +6,11 @@ from sortedcontainers import SortedSet
 from functools import cmp_to_key
 import matplotlib.pyplot as plt
 import json
-
+import generate_sun_like_figure
 import sys
+import time
 
-
-sys.setrecursionlimit(10**6)
+sys.setrecursionlimit(10**7)
 
 #na razie zakladam ze nie bedzie punktow o rownych y, trzeba bedzie te jakies rotacje dorobic
 savefig = False
@@ -149,7 +149,7 @@ class Classification:
         # self.visualizeClassification()
     def convert(self, pointSubset):
         if pointSubset:
-            pts = list(map(lambda i: self.points[i], pointSubset))
+            pts = list(map(lambda i: (self.points[i].x, self.points[i].y), pointSubset))
             resX, resY = zip(*pts)
             return resX, resY
         
@@ -160,7 +160,11 @@ class Classification:
         ylim = (0,10)
         ax.set_xlim(*xlim)
         ax.set_ylim(*ylim)
- 
+        points = list(map(lambda pt: (pt.x, pt.y), self.points))
+        X, Y = zip(*points)
+        for i in range (len(points)):
+            plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]], color = 'grey', alpha =0.5)
+    
         conv = self.convert(self.start)
         if conv is not None:
             X, Y = self.convert(self.start)
@@ -186,14 +190,13 @@ class Classification:
             plt.savefig(path, dpi = 300)
         plt.show(block = True)
 
-
 class Division:
     def __init__(self, polygon, events, sweep):
         self.polygon = polygon #mesh
         self.Q = events
         self.T = sweep
         self.addedDiags = set()
-        self.polygonCopy = deepcopy(self.polygon)
+        self.polygonCopy = deepcopy(polygon)
         self.dictionary = self.initializeDict()
     def initializeDict(self):
         d = dict()
@@ -551,36 +554,41 @@ def triangulate(points):
                 
 
 if __name__ == "__main__":
-    figure = loadFigure("exportData.json")
-    points = figure["points"]
-    X, Y = zip(*points)
-    for i in range (len(points)):
-        plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
-    plt.show()
-    
-    prepare = Structures(points)
-    division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
-    division.divide()
-    division.visualize()
-    facesIdxToRemove = set()
-    allDiags = []
-    for i, face in enumerate(division.polygonCopy.faces[::]):
-        print(i, face)
-        trian = Triangulation(division.polygonCopy, currFace=face)
-        if len(trian.vertices) == 3:
-            continue
-        else:
-            trian.algorithm()
-            allDiags += trian.addedDiags
-            # division.polygon.faces.remove(face)
-    # print(allDiags)
-
-    visualize(division.polygonCopy, allDiags)
-
-
-
-    # figure = loadFigure("fikusny.json")
+    # figure = loadFigure("exportData.json")
     # points = figure["points"]
+    # X, Y = zip(*points)
+    # for i in range (len(points)):
+    #     plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
+    # plt.show()
+    
+    # prepare = Structures(points)
+    # division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
+    # division.divide()
+    # division.visualize()
+    # facesIdxToRemove = set()
+    # allDiags = []
+    # for i, face in enumerate(division.polygonCopy.faces[::]):
+    #     print(i, face)
+    #     trian = Triangulation(division.polygonCopy, currFace=face)
+    #     if len(trian.vertices) == 3:
+    #         continue
+    #     else:
+    #         trian.algorithm()
+    #         allDiags += trian.addedDiags
+    #         # division.polygon.faces.remove(face)
+    # # print(allDiags)
+
+    # visualize(division.polygonCopy, allDiags)
+
+
+
+    # figure = loadFigure("exportData.json")
+    # points = figure["points"]
+    points = generate_sun_like_figure.generate(5,10,500)
+    start = time.time()
+    triangulate(points)
+    end = time.time()
+    print(end - start)
     # draw_triangulation.draw(points, triangulate(points))
 
 
