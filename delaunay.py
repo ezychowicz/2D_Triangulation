@@ -544,8 +544,11 @@ class Mesh:
 
     if not self.faces[face].contains(vertex, self.vertices):
       return None
+    
+    ITERATIONS = 0
 
     while self.faces[face].children:
+      ITERATIONS += 1
       next = None
       for child in self.faces[face].children:
         if self.faceContains(child, vertex):
@@ -555,6 +558,7 @@ class Mesh:
         assert(False)
       face = next
 
+    #print(ITERATIONS)
     self.anim.locatedTriangle(self.faces[face].edge)
     return face
 
@@ -713,5 +717,5 @@ def cdt(points, constrains = [], shuffle = False, anim = DelaunayAnimation()):
 
   return mesh.toTriangleList(True, len(constrains) > 0)
 
-def triangulatePolygon(points, shuffle = False):
-  return cdt(points, [ (i, (i + 1) % len(points)) for i in range(len(points))], shuffle)
+def triangulate(points):
+  return cdt(points, [ (i, (i + 1) % len(points)) for i in range(len(points))], True)

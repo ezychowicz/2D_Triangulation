@@ -1,8 +1,10 @@
 import json
+import time
 import os
 import delaunay
 from utils import interactive_figure, draw_triangulation
 import matplotlib.pyplot as plt
+import generate_sun_like_figure
 
 TestsPath = "delaunayTests/"
 
@@ -159,8 +161,26 @@ def specificTestNoConstrains():
 
   #interactive_figure.export_json_triangulation_path(points, ans, "tmpans2.json")
 
+def sunLikeThing():
+
+  points = generate_sun_like_figure.generate(5, 10, 1000)
+  pointsv = [delaunay.Vector(x, y) for x, y in points]  
+
+  start = time.time()
+  ans = delaunay.triangulate(pointsv)
+  end = time.time()
+  print(end - start)
+  
+  #draw_triangulation.draw([(v.x, v.y) for v in pointsv], ans)
+
 if __name__ == "__main__":
-  print("[A] - interactive, \n[B] - tests, \n[C] - input polygon, get triangulation and save it, \n[D] [Path] loads test from path and shows results, \n[E] [Path] loads test from path and shows results no constrains")
+  print(
+    "[A] - interactive, \n\
+    [B] - tests, \n\
+    [C] - input polygon, get triangulation and save it, \n\
+    [D] [Path] loads test from path and shows results, \n\
+    [E] [Path] loads test from path and shows results no constrains, \n\
+    [F] sun like thing")
   action = str(input())
 
   if len(action) != 1:
@@ -169,5 +189,5 @@ if __name__ == "__main__":
 
   index = ord(action) - ord('A')
 
-  functions = [interactive, tests, inputPolygon, specificTest, specificTestNoConstrains]
+  functions = [interactive, tests, inputPolygon, specificTest, specificTestNoConstrains, sunLikeThing]
   functions[index]()
