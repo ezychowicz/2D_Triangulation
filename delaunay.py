@@ -718,4 +718,5 @@ def cdt(points, constrains = [], shuffle = False, anim = DelaunayAnimation()):
   return mesh.toTriangleList(True, len(constrains) > 0)
 
 def triangulate(points):
-  return cdt(points, [ (i, (i + 1) % len(points)) for i in range(len(points))], True)
+  pointsv = [Vector(x, y) for x, y in points]
+  return cdt(pointsv, [ (i, (i + 1) % len(pointsv)) for i in range(len(pointsv))], True)

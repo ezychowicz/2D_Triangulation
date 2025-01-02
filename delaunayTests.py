@@ -163,11 +163,10 @@ def specificTestNoConstrains():
 
 def sunLikeThing():
 
-  points = generate_sun_like_figure.generate(5, 10, 1000)
-  pointsv = [delaunay.Vector(x, y) for x, y in points]  
+  points = generate_sun_like_figure.generate(5, 10, 10000)  
 
   start = time.time()
-  ans = delaunay.triangulate(pointsv)
+  ans = delaunay.triangulate(points)
   end = time.time()
   print(end - start)
   
