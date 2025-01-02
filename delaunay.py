@@ -311,6 +311,7 @@ class DelaunayAnimation:
 class Mesh:
 
   def __init__(self, vertices, anim = DelaunayAnimation()):
+    self.NoDelaunay = True
     self.anim = anim
     self.anim.skip = True
 
@@ -324,6 +325,8 @@ class Mesh:
     vertices.append(p1)
     vertices.append(p2)
     vertices.append(p3)
+
+    self.supertriangleIndices = [len(vertices) - 3, len(vertices) - 2, len(vertices) - 1]
 
     e3 = HalfEdge(None, None, len(vertices) - 1, 0)
     e2 = HalfEdge(None, e3, len(vertices) - 2, 0)
@@ -393,8 +396,19 @@ class Mesh:
     return newEdge
 
   # check if edge is legal
-  def isEdgeLegal(self, edge):
-    return circumcircleTest(self.vertices[edge.vertex], self.vertices[edge.next.vertex], self.vertices[edge.next.next.vertex], self.vertices[edge.twin.next.next.vertex]) <= 0
+  def isEdgeLegal(self, edge):    
+    if edge.vertex in self.supertriangleIndices and edge.next.vertex in self.supertriangleIndices:
+      return True
+    
+    if edge.vertex in self.supertriangleIndices or edge.next.vertex in self.supertriangleIndices:
+      return not quadConvex(self.vertices[edge.vertex], self.vertices[edge.twin.next.next.vertex], self.vertices[edge.twin.vertex], self.vertices[edge.next.next.vertex])
+    
+    if edge.next.next in self.supertriangleIndices or edge.twin.next.next in self.supertriangleIndices:
+      return True    
+    
+    return self.NoDelaunay or circumcircleTest(self.vertices[edge.vertex], self.vertices[edge.next.vertex], self.vertices[edge.next.next.vertex], self.vertices[edge.twin.next.next.vertex]) <= 0
+
+
 
   # makes edge meet delaunay criteria
   def legalizeEdge(self, edge):
@@ -586,7 +600,7 @@ class Mesh:
 
     intersecting = self.findIntersectingEdges(index1, index2)
     newEdges = []
-
+  
     # recover constrained edge
     while intersecting:
       e = intersecting.popleft()

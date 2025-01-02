@@ -89,11 +89,14 @@ def test(inpath, outpath):
   points = figure["points"]
   constrains = figure["edges"]
 
-  got = delaunay.cdt([delaunay.Vector(x, y) for x, y in points], constrains)
-  correct = ansfigure["triangles"]
+  got = delaunay.cdt([delaunay.Vector(x, y) for x, y in points], constrains)  
+  correct = [ tuple(v) for v in ansfigure["triangles"]  ]
+
+  got.sort()
+  correct.sort()  
 
   for i in range(len(got)):
-    if got[i] != tuple(correct[i]):
+    if not got[i] in correct and not (got[i][1], got[i][2], got[i][0]) in correct and not (got[i][2], got[i][0], got[i][1]) in correct:
       return False
   return True
 
@@ -139,10 +142,25 @@ def specificTest():
 
   draw_triangulation.draw(points, ans, constrains)
 
+def specificTestNoConstrains():
+  path = input()
+
+  with open(path,"r") as jsonFile:
+    figure = json.load(jsonFile)
+
+  points = figure["points"]  
+
+  pointsv = [delaunay.Vector(x, y) for x, y in points]  
+  ans = delaunay.dt(pointsv, False)  
+  pointsv.pop()
+  pointsv.pop()
+  pointsv.pop()
+  draw_triangulation.draw([(v.x, v.y) for v in pointsv], ans)
+
   #interactive_figure.export_json_triangulation_path(points, ans, "tmpans2.json")
 
 if __name__ == "__main__":
-  print("[A] - interactive, \n[B] - tests, \n[C] - input polygon, get triangulation and save it, \n[D] [Path] loads test from path and shows results")
+  print("[A] - interactive, \n[B] - tests, \n[C] - input polygon, get triangulation and save it, \n[D] [Path] loads test from path and shows results, \n[E] [Path] loads test from path and shows results no constrains")
   action = str(input())
 
   if len(action) != 1:
@@ -151,5 +169,5 @@ if __name__ == "__main__":
 
   index = ord(action) - ord('A')
 
-  functions = [interactive, tests, inputPolygon, specificTest]
+  functions = [interactive, tests, inputPolygon, specificTest, specificTestNoConstrains]
   functions[index]()
