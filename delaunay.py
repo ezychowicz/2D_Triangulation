@@ -311,7 +311,7 @@ class DelaunayAnimation:
 class Mesh:
 
   def __init__(self, vertices, anim = DelaunayAnimation()):
-    self.NoDelaunay = True
+    self.NoDelaunay = False
     self.anim = anim
     self.anim.skip = True
 
