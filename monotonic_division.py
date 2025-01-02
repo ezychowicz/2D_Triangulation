@@ -1,5 +1,5 @@
 from pathlib import Path
-from utils.halfedge import HalfEdge, HalfEdgeMesh, Vertex, Face
+from utils.halfedge import HalfEdge, HalfEdgeMesh, Vertex, Face, Graph
 from utils import interactive_figure, draw_triangulation
 from copy import deepcopy
 from sortedcontainers import SortedSet 
@@ -9,6 +9,7 @@ import json
 import generate_sun_like_figure
 import sys
 import time
+import math 
 
 sys.setrecursionlimit(10**7)
 
@@ -40,12 +41,14 @@ class Structures:
         '''
         mesh = HalfEdgeMesh(vertices = self.points) 
         ccwFace = []
+        cwFace = []
         N = len(self.points) 
         for i in range (N - 1):
             e1, e2 = mesh.addEdge(self.points[i], self.points[i + 1])
             self.points[i].outgoingEdge = e1
             self.points[i + 1].outgoingEdge = e2
             ccwFace.append(e1)
+            cwFace.append(e2)
         #edge case dla ostatniej krawedzi:       
         edge1, edge2 = HalfEdge(), HalfEdge()
         v1, v2 = self.points[-1], self.points[0]
@@ -57,6 +60,7 @@ class Structures:
         mesh.edges.append(edge1)
         mesh.edges.append(edge2)
         ccwFace.append(edge1)
+        cwFace.append(edge2)
         for i, edge in enumerate(mesh.edges):
             pt1,pt2 = edge.origin, edge.twin.origin
             edge.A = pt2.y - pt1.y
@@ -65,9 +69,8 @@ class Structures:
         
         
         mesh.addFace(ccwFace) #connect (prev, next) and add face
-        
+        # mesh.addFace(cwFace)
         return mesh
-
 
 
     def prepareEvents(self):
@@ -194,17 +197,18 @@ class Division:
     def __init__(self, polygon, events, sweep):
         self.polygon = polygon #mesh
         self.Q = events
+        self.D = Graph(deepcopy(self.polygon.vertices), [(self.polygon.vertices[i], self.polygon.vertices[(i + 1)%len(self.polygon.vertices)]) for i in range (len(self.polygon.vertices))])
         self.T = sweep
-        self.addedDiags = set()
-        self.polygonCopy = deepcopy(polygon)
-        self.dictionary = self.initializeDict()
-    def initializeDict(self):
-        d = dict()
-        for i,edge in enumerate(self.polygon.edges):
-            d[edge] = self.polygonCopy.edges[i] 
-        return d
-    def originalToCopy(self, originalEdge):
-        return self.dictionary[originalEdge]
+        # self.addedDiags = set()
+        # self.polygonCopy = deepcopy(polygon)
+        # self.dictionary = self.initializeDict()
+    # def initializeDict(self):
+    #     d = dict()
+    #     for i,edge in enumerate(self.polygon.edges):
+    #         d[edge] = self.polygonCopy.edges[i] 
+    #     return d
+    # def originalToCopy(self, originalEdge):
+    #     return self.dictionary[originalEdge]
     
     def handleStartVertex(self, v):
         toAdd = v.outgoingEdge
@@ -214,9 +218,7 @@ class Division:
     def handleEndVertex(self, v):
         prevEdge = v.outgoingEdge.prev
         if prevEdge.helper is not None and prevEdge.helper.type == 'M':
-            prevEdgeHelperD = self.polygonCopy.vertices[prevEdge.helper.id]
-            vD = self.polygonCopy.vertices[v.id]
-            self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, prevEdgeHelperD)) #tylko tu musi byc ta oryginalna
+            self.D.addDiagDiv(v.id, prevEdge.helper.id) #tylko tu musi byc ta oryginalna
         self.T.discard(prevEdge)
         
     def handleSplitVertex(self, v):
@@ -224,36 +226,25 @@ class Division:
         e.helper = v
         self.T.add(e)
         left = self.T[self.T.index(e) - 1] #na lewo od e_{i}, na pewno nalezy do T bo dodalem dopiero
-        leftHelperD = self.polygonCopy.vertices[left.helper.id]
-        vD = self.polygonCopy.vertices[v.id]
-        self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, leftHelperD))
+        self.D.addDiagDiv(v.id, left.helper.id)
         left.helper = v
 
     def handleMergeVertex(self, v):
-        second = False
         prevEdge = v.outgoingEdge.prev #prevedge tutaj na pewno nie jest diagonalną bo dopiero po zamieceniu v moze powstac do niego diagonalna. ALE sprawdzic nie zaszkodzi
         if prevEdge.helper is not None and prevEdge.helper.type == 'M':
-            prevEdgeHelperD = self.polygonCopy.vertices[prevEdge.helper.id]
-            vD = self.polygonCopy.vertices[v.id]
-            self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, prevEdgeHelperD))
-            second = True 
+            self.D.addDiagDiv(v.id, prevEdge.helper.id)
         left = self.T[self.T.index(prevEdge) - 1] #na lewo od e_{i-1}, na pewno w T bo jest przy lewym przbu
         self.T.discard(prevEdge)
         if left.helper.type == 'M':
-            leftHelperD = self.polygonCopy.vertices[left.helper.id]
-            vD = self.polygonCopy.vertices[v.id]
-            self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, leftHelperD, second))
+            self.D.addDiagDiv(v.id, left.helper.id)
         left.helper = v
         
     
     def handleRegularVertex(self, v):
         if v.type == 'RL': #intP po prawej    
             prevEdge = v.outgoingEdge.prev
-            
-            if prevEdge.helper is not None and prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge nie zostal zakryty przekatna
-                prevEdgeHelperD = self.polygonCopy.vertices[prevEdge.helper.id]
-                vD = self.polygonCopy.vertices[v.id]                
-                self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, prevEdgeHelperD))
+            if prevEdge.helper is not None and prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge nie zostal zakryty przekatna             
+                self.D.addDiagDiv(v.id, prevEdge.helper.id)
             self.T.discard(prevEdge)
             v.outgoingEdge.helper = v
             self.T.add(v.outgoingEdge)
@@ -263,35 +254,34 @@ class Division:
             left = self.T[self.T.index(probe) - 1]
             self.T.discard(probe) #wyciagamy sonde
             if left.helper.type == 'M':
-                leftHelperD = self.polygonCopy.vertices[left.helper.id]
-                vD = self.polygonCopy.vertices[v.id]
-                self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, leftHelperD))
+                self.D.addDiagDiv(v.id, left.helper.id)
             left.helper = v
 
-    def createAdjacentFaces(self, diag, visited):
-        if not visited[diag]:
-            newface = Face()
-            diag.face = newface
-            visited[diag] = True
-            newface.outerEdge = diag
-            p = diag.next
-            while p != diag: 
-                p.face = newface
-                visited[p] = True
-                p = p.next
-            self.polygonCopy.faces.append(newface)
-        if not visited[diag.twin]:
-            newface = Face()
-            diagTwin = diag.twin
-            newface.outerEdge = diagTwin
-            diagTwin.face = newface
-            visited[diagTwin] = True
-            q = diagTwin.next
-            while q != diagTwin:
-                q.face = newface
-                visited[q] = True
-                q = q.next
-            self.polygonCopy.faces.append(newface)
+    # def createAdjacentFaces(self, diag, visited):
+    #     if not visited[diag]:
+    #         newface = Face()
+    #         diag.face = newface
+    #         visited[diag] = True
+    #         newface.outerEdge = diag
+    #         p = diag.next
+    #         while p != diag: 
+    #             p.face = newface
+    #             visited[p] = True
+    #             p = p.next
+    #         self.polygonCopy.faces.append(newface)
+    #     if not visited[diag.twin]:
+    #         newface = Face()
+    #         diagTwin = diag.twin
+    #         newface.outerEdge = diagTwin
+    #         diagTwin.face = newface
+    #         visited[diagTwin] = True
+    #         q = diagTwin.next
+    #         while q != diagTwin:
+    #             q.face = newface
+    #             visited[q] = True
+    #             q = q.next
+    #         self.polygonCopy.faces.append(newface)
+
 
     def updateFaces(self): 
         '''
@@ -300,16 +290,54 @@ class Division:
         Warning: we shouldn't start at non-diagonal, because if we did so, we would traverse whole initial polygon and every initial edge would have the same face.
         Result: A polygon separated into faces. 
         '''
-        if len(self.addedDiags) == 0:
-            return
-        self.polygonCopy.faces = [] #bo na razie miał jedną ścianę, ale zostanie ona usunięta, bo podzielono ją na kilka mniejszych.
-        visited = dict()
-        for diag in self.addedDiags:
-            visited[diag] = False
-            visited[diag.twin] = False
-        for diag in self.addedDiags:
-            if not visited[diag] or not visited[diag.twin]:
-                self.createAdjacentFaces(diag, visited)
+        faces = []
+        def cmp(v1ID, v2ID):
+            nonlocal i
+            v0 = self.polygon.vertices[i]
+            v1 = self.polygon.vertices[v1ID]
+            v2 = self.polygon.vertices[v2ID]
+            
+            dx1, dy1 = v1.x - v0.x, v1.y - v0.y
+            dx2, dy2 = v2.x - v0.x, v2.y - v0.y
+
+            angle1 = math.atan2(dy1, dx1)
+            angle2 = math.atan2(dy2, dx2)
+            return -1 if angle1 < angle2 else 1 if angle1 > angle2 else 0
+        
+        def prevIdx(curr, out):
+            idxOut = self.D.G[curr].index(out)
+
+            return (idxOut - 1)%len(self.D.G[curr])
+        visited = [[False for _ in range (len(self.D.G[i]))] for i in range (len(self.D.vertices))]
+
+        for i in range (len(self.D.vertices)):
+            self.D.G[i].sort(key = cmp_to_key(cmp))
+        for i in range (len(self.polygon.vertices) -1, -1, -1):
+            visited[i][self.D.G[i].index((i - 1)%len(self.polygon.vertices))] = True 
+        for i in range (len(self.D.G)):
+            for j in range (len(self.D.G[i])):
+                if visited[i][j]:
+                    continue
+                face = []
+                out = j
+                while not visited[i][out]:
+                    visited[i][out] = True
+                    face.append(self.polygon.vertices[i])
+                    adj = self.D.G[i][out] #przechodzimy do Vertex o id=adj
+                    best = prevIdx(adj, i) #poprzednik krawędzi adj->i (indeks)
+                    i, out = adj, best
+                faces.append(face)
+        return faces
+    #     if len(self.addedDiags) == 0:
+    #         return
+    #     self.polygonCopy.faces = [] #bo na razie miał jedną ścianę, ale zostanie ona usunięta, bo podzielono ją na kilka mniejszych.
+    #     visited = dict()
+    #     for diag in self.addedDiags:
+    #         visited[diag] = False
+    #         visited[diag.twin] = False
+    #     for diag in self.addedDiags:
+    #         if not visited[diag] or not visited[diag.twin]:
+    #             self.createAdjacentFaces(diag, visited)
 
     def divide(self):
         handle = {'M': self.handleMergeVertex, 'S': self.handleSplitVertex, 'I': self.handleStartVertex, 'RL': self.handleRegularVertex, 'RR': self.handleRegularVertex, 'E': self.handleEndVertex}
@@ -319,17 +347,17 @@ class Division:
             HalfEdge.currY = event.y
             func = handle[event.type]
             func(event)
-        self.updateFaces()
-        return self.polygonCopy
+        faces = self.updateFaces()
+        return faces
 
     def visualize(self):
         fig, ax = plt.subplots()
-        xlim = (0,10)
-        ylim = (0,10)
-        ax.set_xlim(*xlim)
-        ax.set_ylim(*ylim)
+        # xlim = (0,10)
+        # ylim = (0,10)
+        # ax.set_xlim(*xlim)
+        # ax.set_ylim(*ylim)
         edgeSet = set()
-        for edge in self.polygonCopy.edges:
+        for edge in self.D.edges:
             if edge not in edgeSet and edge.twin not in edgeSet:
                 edgeSet.add(edge)
         pts = [(edge.origin, edge.twin.origin) for edge in edgeSet]
@@ -346,11 +374,9 @@ class Triangulation:
     Pozostałe funkcje są pomocnicze.
     '''
 
-    def __init__(self, mesh, currFace, eps = 10**(-12)):
-        self.mesh = mesh
+    def __init__(self, currFace, eps = 10**(-12)):
         self.eps = eps
-        self.currFace = currFace
-        self.vertices = self.mesh.extractFaceVertices(currFace)
+        self.vertices = currFace
         self.left = [True]*(len(self.vertices))
         self.addedDiags = []
         self.triangles = []
@@ -516,10 +542,10 @@ class Triangulation:
 def visualize(mesh, addedDiags):
     fig, ax = plt.subplots()
     ax.clear()
-    xlim = (0,10)
-    ylim = (0,10)
-    ax.set_xlim(*xlim)
-    ax.set_ylim(*ylim)
+    # xlim = (0,10)
+    # ylim = (0,10)
+    # ax.set_xlim(*xlim)
+    # ax.set_ylim(*ylim)
     edgeSet = set()
     for edge in mesh.edges:
         if edge not in edgeSet and edge.twin not in edgeSet:
@@ -538,11 +564,11 @@ def triangulate(points):
     '''
     prepare = Structures(points)
     division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
-    division.divide()
+    faces = division.divide()
     allTriangles = []
-    for face in division.polygonCopy.faces:
-        trian = Triangulation(division.polygonCopy, currFace=face)
-        if len(trian.vertices) == 3:
+    for face in faces:
+        trian = Triangulation(currFace=face)
+        if len(face) == 3:
             allTriangles += [(trian.vertices[0].id, trian.vertices[1].id, trian.vertices[2].id)]
         
         else:
@@ -554,7 +580,7 @@ def triangulate(points):
                 
 
 if __name__ == "__main__":
-    # figure = loadFigure("exportData.json")
+    # figure = loadFigure("mountains.json")
     # points = figure["points"]
     # X, Y = zip(*points)
     # for i in range (len(points)):
@@ -579,11 +605,32 @@ if __name__ == "__main__":
     # # print(allDiags)
 
     # visualize(division.polygonCopy, allDiags)
-
-
-
-    # figure = loadFigure("exportData.json")
+    # figure = loadFigure("mountains.json")
     # points = figure["points"]
+    # prepare = Structures(points)
+    # division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
+    # faces = division.divide()
+    # # division.visualize()
+    # facesIdxToRemove = set()
+    # allDiags = []
+    # for i, face in faces:
+    #     print(i, face)
+    #     trian = Triangulation(division.polygonCopy, currFace=face)
+    #     if len(face) == 3:
+    #         continue
+    #     else:
+    #         trian.algorithm()
+    #         allDiags += trian.addedDiags
+    #         # division.polygon.faces.remove(face)
+    # # print(allDiags)
+
+
+    # figure = loadFigure("niedziala.json")
+    # points = figure["points"]
+    # X, Y = zip(*points)
+    # for i in range (len(points)):
+    #     plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
+    # plt.show()
     points = generate_sun_like_figure.generate(5,10,500)
     start = time.time()
     triangulate(points)

@@ -2,16 +2,20 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
+# np.random.seed(155)
+
+
 def sortPair(a,b):
     if a == b:
         b += 10**(-10)
     return (a,b) if a < b else (b,a)
 def generate(r1, r2, n):
-    fi1 = sorted([np.random.uniform(0, 2*math.pi) for _ in range(n)])
-    inner = [(r1 * math.cos(fi), r1 * math.sin(fi)) for fi in fi1]
-    fi2 = sorted([np.random.uniform(*sortPair(fi1[i], fi1[(i + 1)%n])) for i in range (n)])
-    outer = [(r2*math.cos(fi), r2*math.sin(fi)) for fi in fi2]
-    resCCW = [inner[i//2] if i%2 == 0 else outer[i//2] for i in range (2*n)]
+    # fi1 = sorted([np.random.uniform(0, 2*math.pi) for _ in range(n)])
+    # inner = [(r1 * math.cos(fi), r1 * math.sin(fi)) for fi in fi1]
+    # fi2 = sorted([np.random.uniform(*sortPair(fi1[i], fi1[(i + 1)%n])) for i in range (n)])
+    # outer = [(r2*math.cos(fi), r2*math.sin(fi)) for fi in fi2]
+    fi1 = sorted([np.random.uniform(0, 2*math.pi) for _ in range(2*n)])
+    resCCW = [(r1 * math.cos(fi), r1 * math.sin(fi)) if i%2 == 0 else (r2*math.cos(fi), r2*math.sin(fi)) for i,fi in enumerate(fi1)]
     return resCCW
  
 def visualize(points):
@@ -42,4 +46,4 @@ def visualize(points):
     plt.legend()
     plt.show()
 
-# visualize(generate(1,6,1000))
+# visualize(generate(1,6,10))
