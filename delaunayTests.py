@@ -163,7 +163,7 @@ def specificTestNoConstrains():
 
 def sunLikeThing():
 
-  points = generate_sun_like_figure.generate(5, 10, 10000)  
+  points = generate_sun_like_figure.snowflake(4, 1)
 
   start = time.time()
   ans = delaunay.triangulate(points)

@@ -66,6 +66,7 @@ def quadConvex(a, b, c, d):
 
 # finds trinagle that contains all points, else returns some arbitrary triangle (used for interactive mode)
 def getBoundingTriangle(points):
+  return Vector(-100000, -100000), Vector(100000, -100000), Vector(0, 100000)
   if len(points) == 0:
     return Vector(-1000, -1000), Vector(1000, -1000), Vector(0, 1000)
   minx = points[0].x
