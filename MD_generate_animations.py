@@ -8,8 +8,7 @@ import matplotlib.pyplot as plt
 import json
 import animations
 import sys
-
-
+import generate_sun_like_figure
 sys.setrecursionlimit(10**6)
 
 #na razie zakladam ze nie bedzie punktow o rownych y, trzeba bedzie te jakies rotacje dorobic
@@ -196,10 +195,10 @@ class Division:
         self.polygonCopy = deepcopy(self.polygon)
         self.dictionary = self.initializeDict()
         self.fig, self.ax = plt.subplots()
-        xlim = (0,10)
-        ylim = (0,10)
-        self.ax.set_xlim(*xlim)
-        self.ax.set_ylim(*ylim)
+        # xlim = (0,10)
+        # ylim = (0,10)
+        # self.ax.set_xlim(*xlim)
+        # self.ax.set_ylim(*ylim)
         self.anim = animations.Animation(self.fig, self.ax, 'test')
         self.frame = 10
     def initializeDict(self):
@@ -639,5 +638,7 @@ def triangulate(points):
 if __name__ == "__main__":
     figure = loadFigure("exportData.json")
     points = figure["points"]
+    points = generate_sun_like_figure.generate(5,10,10)
     triangulate(points)
+    
 
