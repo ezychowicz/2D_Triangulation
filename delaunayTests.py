@@ -29,19 +29,18 @@ def interactive():
   mesh = delaunay.Mesh([])
 
   def onclick(event):
-    nonlocal mesh
-
+    nonlocal mesh    
     prevPos = delaunay.Vector(event.xdata, event.ydata)
-
+    
     if  event.inaxes:
       if event.button == 1:
-        mesh.vertices.append(delaunay.Vector(event.xdata, event.ydata))
+        mesh.vertices.append(delaunay.Vector(event.xdata, event.ydata)  )
         l = mesh.locate(delaunay.Vector(event.xdata, event.ydata))
         if l != None:
           mesh.addVertexAndLegalize(l, len(mesh.vertices) - 1)
 
   def onmoved(event):
-    nonlocal mesh
+    nonlocal mesh    
     plt.clf()
     textScatter([p.x for p in mesh.vertices], [p.y for p in mesh.vertices], color = 'orange')
     t = mesh.toTriangleList(False)
@@ -71,7 +70,7 @@ def interactive():
         prevValue = digit_value
       else:
         mesh.constrainEdge(prevValue, digit_value)
-        prevValue = None
+        prevValue = None          
 
   fig.canvas.mpl_connect('key_press_event', on_key)
 
@@ -140,7 +139,7 @@ def specificTest():
   anim = delaunay.DelaunayAnimation(pointsv, True)
   #anim = delaunay.DelaunayAnimation()
   ans = delaunay.cdt(pointsv, constrains, False, anim)
-  anim.anim.draw(100)
+  anim.anim.draw(500)
 
   draw_triangulation.draw(points, ans, constrains)
 
@@ -163,14 +162,14 @@ def specificTestNoConstrains():
 
 def sunLikeThing():
 
-  points = generate_sun_like_figure.snowflake(4, 1)
+  points = generate_sun_like_figure.snowflake(3, 10)
 
   start = time.time()
   ans = delaunay.triangulate(points)
   end = time.time()
   print(end - start)
   
-  #draw_triangulation.draw([(v.x, v.y) for v in pointsv], ans)
+  draw_triangulation.draw(points, ans)
 
 if __name__ == "__main__":
   print(
