@@ -65,8 +65,7 @@ def quadConvex(a, b, c, d):
   return orientation(a, b, c) == orientation(b, c, d) == orientation(c, d, a) == orientation(d, a, b) == -1
 
 # finds trinagle that contains all points, else returns some arbitrary triangle (used for interactive mode)
-def getBoundingTriangle(points):
-  return Vector(-100000, -100000), Vector(100000, -100000), Vector(0, 100000)
+def getBoundingTriangle(points):  
   if len(points) == 0:
     return Vector(-1000, -1000), Vector(1000, -1000), Vector(0, 1000)
   minx = points[0].x
@@ -313,8 +312,7 @@ class Mesh:
 
   def __init__(self, vertices, anim = DelaunayAnimation()):
     self.NoDelaunay = False
-    self.anim = anim
-    self.anim.skip = True
+    self.anim = anim    
 
     self.OnSegmentEpsilon = 10**-6
 
