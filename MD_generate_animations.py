@@ -11,9 +11,9 @@ import os
 import generate_sun_like_figure
 import math
 import time
-#na razie zakladam ze nie bedzie punktow o rownych y, trzeba bedzie te jakies rotacje dorobic
+
 savefig = False
-EPS = 10**(-10)
+
 
 def det_sarrus(A, B, C):
     return A.x*B.y + A.y*C.x + B.x*C.y - C.x*B.y - B.x*A.y - A.x*C.y
@@ -28,7 +28,6 @@ def loadFigure(dataName = "exportData.json"):
     return figure
 
 class Structures:
-    global EPS
     def __init__(self, points):
         self.points = [Vertex(points[i][0], points[i][1], i) for i in range (len(points))]
         
@@ -261,13 +260,13 @@ class Division:
         self.setAsHelperAnim(v)
 
     def handleMergeVertex(self, v):
-        prevEdge = v.outgoingEdge.prev #prevedge tutaj na pewno nie jest diagonalną bo dopiero po zamieceniu v moze powstac do niego diagonalna. ALE sprawdzic nie zaszkodzi
+        prevEdge = v.outgoingEdge.prev 
         if prevEdge.helper is not None and prevEdge.helper.type == 'M':
             self.D.addDiagDiv(v.id, prevEdge.helper.id)
 
             self.addDiagonalAnim(v, prevEdge.helper)
 
-        left = self.T[self.T.index(prevEdge) - 1] #na lewo od e_{i-1}, na pewno w T bo jest przy lewym przbu
+        left = self.T[self.T.index(prevEdge) - 1] 
         self.T.discard(prevEdge)
 
         self.deleteFromTStructureAnim(prevEdge)
@@ -285,7 +284,7 @@ class Division:
         if v.type == 'RL': #intP po prawej    
             prevEdge = v.outgoingEdge.prev
             
-            if prevEdge.helper is not None and prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge nie zostal zakryty przekatna         
+            if prevEdge.helper is not None and prevEdge.helper.type == 'M':       
                 self.D.addDiagDiv(v.id, prevEdge.helper.id)
 
                 self.addDiagonalAnim(v, prevEdge.helper)
@@ -364,7 +363,6 @@ class Division:
         X, Y = zip(*points)
         for i in range (len(points)):
             self.ax.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]], color = 'blue')
-        #
 
         mergeOrSplits = [p for i, p in enumerate(points) if self.polygon.vertices[i].type in ('M', 'S')]
         if len(mergeOrSplits) != 0:

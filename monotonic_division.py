@@ -11,11 +11,8 @@ import sys
 import time
 import math 
 
-
-
-#na razie zakladam ze nie bedzie punktow o rownych y, trzeba bedzie te jakies rotacje dorobic
 savefig = False
-EPS = 10**(-10)
+
 
 def det_sarrus(A, B, C):
     return A.x*B.y + A.y*C.x + B.x*C.y - C.x*B.y - B.x*A.y - A.x*C.y
@@ -30,7 +27,6 @@ def loadFigure(dataName = "exportData.json"):
     return figure
 
 class Structures:
-    global EPS
     def __init__(self, points):
         self.points = [Vertex(points[i][0], points[i][1], i) for i in range (len(points))]
         
@@ -148,7 +144,7 @@ class Classification:
                     point.type = 'RL' #regular left, intP po prawej
                 else:
                     point.type = 'RR' #regular right, intP po lewej
-        # self.visualizeClassification()
+
     def convert(self, pointSubset):
         if pointSubset:
             pts = list(map(lambda i: (self.points[i].x, self.points[i].y), pointSubset))
@@ -197,7 +193,6 @@ class Division:
         self.polygon = polygon #mesh
         self.Q = events
         self.D = Graph(self.polygon.vertices, [(self.polygon.vertices[i], self.polygon.vertices[(i + 1)%len(self.polygon.vertices)]) for i in range (len(self.polygon.vertices))])
-        # self.visualize()
         self.T = sweep
     
     def handleStartVertex(self, v):
@@ -208,7 +203,7 @@ class Division:
     def handleEndVertex(self, v):
         prevEdge = v.outgoingEdge.prev
         if prevEdge.helper is not None and prevEdge.helper.type == 'M':
-            self.D.addDiagDiv(v.id, prevEdge.helper.id) #tylko tu musi byc ta oryginalna
+            self.D.addDiagDiv(v.id, prevEdge.helper.id) 
         self.T.discard(prevEdge)
         
     def handleSplitVertex(self, v):
@@ -220,10 +215,10 @@ class Division:
         left.helper = v
 
     def handleMergeVertex(self, v):
-        prevEdge = v.outgoingEdge.prev #prevedge tutaj na pewno nie jest diagonalną bo dopiero po zamieceniu v moze powstac do niego diagonalna. ALE sprawdzic nie zaszkodzi
+        prevEdge = v.outgoingEdge.prev 
         if prevEdge.helper is not None and prevEdge.helper.type == 'M':
             self.D.addDiagDiv(v.id, prevEdge.helper.id)
-        left = self.T[self.T.index(prevEdge) - 1] #na lewo od e_{i-1}, na pewno w T bo jest przy lewym przbu
+        left = self.T[self.T.index(prevEdge) - 1] #na lewo od e_{i-1}, na pewno w T
         self.T.discard(prevEdge)
         if left.helper.type == 'M':
             self.D.addDiagDiv(v.id, left.helper.id)
@@ -233,7 +228,7 @@ class Division:
     def handleRegularVertex(self, v):
         if v.type == 'RL': #intP po prawej    
             prevEdge = v.outgoingEdge.prev
-            if prevEdge.helper is not None and prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge nie zostal zakryty przekatna             
+            if prevEdge.helper is not None and prevEdge.helper.type == 'M':            
                 self.D.addDiagDiv(v.id, prevEdge.helper.id)
             self.T.discard(prevEdge)
             v.outgoingEdge.helper = v
@@ -296,7 +291,6 @@ class Division:
         handle = {'M': self.handleMergeVertex, 'S': self.handleSplitVertex, 'I': self.handleStartVertex, 'RL': self.handleRegularVertex, 'RR': self.handleRegularVertex, 'E': self.handleEndVertex}
         while self.Q:
             event = self.Q.pop()
-            # print(event.type)
             HalfEdge.currY = event.y
             func = handle[event.type]
             func(event)
@@ -505,7 +499,6 @@ def triangulate(points):
     prepare = Structures(points)
     division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
     faces = division.divide()
-    # division.visualize()
     allTriangles = []
     for face in faces:
         trian = Triangulation(currFace=face)
