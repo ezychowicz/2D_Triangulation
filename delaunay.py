@@ -312,8 +312,7 @@ class Mesh:
 
   def __init__(self, vertices, anim = DelaunayAnimation()):
     self.NoDelaunay = False
-    self.anim = anim
-    self.anim.skip = True
+    self.anim = anim    
 
     self.OnSegmentEpsilon = 10**-6
 
