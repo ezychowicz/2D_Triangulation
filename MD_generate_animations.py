@@ -1,5 +1,5 @@
 from pathlib import Path
-from utils.halfedge import HalfEdge, HalfEdgeMesh, Vertex, Face
+from utils.halfedge import HalfEdge, HalfEdgeMesh, Vertex, Face, Graph
 from utils import interactive_figure, draw_triangulation
 from copy import deepcopy
 from sortedcontainers import SortedSet 
@@ -7,10 +7,10 @@ from functools import cmp_to_key
 import matplotlib.pyplot as plt
 import json
 import animations
-import sys
+import os
 import generate_sun_like_figure
-sys.setrecursionlimit(10**6)
-
+import math
+import time
 #na razie zakladam ze nie bedzie punktow o rownych y, trzeba bedzie te jakies rotacje dorobic
 savefig = False
 EPS = 10**(-10)
@@ -191,22 +191,11 @@ class Division:
         self.polygon = polygon #mesh
         self.Q = events
         self.T = sweep
-        self.addedDiags = set()
-        self.polygonCopy = deepcopy(self.polygon)
-        self.dictionary = self.initializeDict()
         self.fig, self.ax = plt.subplots()
-        # xlim = (0,10)
-        # ylim = (0,10)
-        # self.ax.set_xlim(*xlim)
-        # self.ax.set_ylim(*ylim)
-        self.anim = animations.Animation(self.fig, self.ax, 'test')
+        self.D = Graph(self.polygon.vertices, [(self.polygon.vertices[i], self.polygon.vertices[(i + 1)%len(self.polygon.vertices)]) for i in range (len(self.polygon.vertices))])
+        self.anim = animations.Animation(self.fig, self.ax, "C:\\Users\\emilz\\geometryczne_projekt\\TriangulacjaProjekt\\wizualizacje\\deBerg.gif")
         self.frame = 10
-    def initializeDict(self):
-        d = dict()
-        for i,edge in enumerate(self.polygon.edges):
-            d[edge] = self.polygonCopy.edges[i] 
-        return d
-    
+
     def addToTStructureAnim(self, halfedge):
         self.anim.addAction(self.frame, lambda line = halfedge: self.anim.changeLineColor('lightgreen', self.anim.find_line_index((line.origin.x, line.origin.y), (line.twin.origin.x, line.twin.origin.y))))
         self.frame += 2
@@ -242,11 +231,9 @@ class Division:
     def handleEndVertex(self, v):
         prevEdge = v.outgoingEdge.prev
         if prevEdge.helper is not None and prevEdge.helper.type == 'M':
-            prevEdgeHelperD = self.polygonCopy.vertices[prevEdge.helper.id]
-            vD = self.polygonCopy.vertices[v.id]
-            self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, prevEdgeHelperD)) 
+            self.D.addDiagDiv(v.id, prevEdge.helper.id)
 
-            self.addDiagonalAnim(vD, prevEdgeHelperD)
+            self.addDiagonalAnim(v, prevEdge.helper)
 
         self.T.discard(prevEdge)
 
@@ -264,38 +251,31 @@ class Division:
         self.addToTStructureAnim(e)
         
         left = self.T[self.T.index(e) - 1] #na lewo od e_{i}, na pewno nalezy do T bo dodalem dopiero
-        leftHelperD = self.polygonCopy.vertices[left.helper.id]
-        vD = self.polygonCopy.vertices[v.id]
-        self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, leftHelperD))
 
-        self.addDiagonalAnim(vD, leftHelperD)
+        self.D.addDiagDiv(v.id, left.helper.id)
+
+        self.addDiagonalAnim(v, left.helper)
 
         self.removeAsHelperAnim(left.helper)
         left.helper = v
         self.setAsHelperAnim(v)
 
     def handleMergeVertex(self, v):
-        second = False
         prevEdge = v.outgoingEdge.prev #prevedge tutaj na pewno nie jest diagonalną bo dopiero po zamieceniu v moze powstac do niego diagonalna. ALE sprawdzic nie zaszkodzi
         if prevEdge.helper is not None and prevEdge.helper.type == 'M':
-            prevEdgeHelperD = self.polygonCopy.vertices[prevEdge.helper.id]
-            vD = self.polygonCopy.vertices[v.id]
-            self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, prevEdgeHelperD))
+            self.D.addDiagDiv(v.id, prevEdge.helper.id)
 
-            self.addDiagonalAnim(vD, prevEdgeHelperD)
+            self.addDiagonalAnim(v, prevEdge.helper)
 
-            second = True 
         left = self.T[self.T.index(prevEdge) - 1] #na lewo od e_{i-1}, na pewno w T bo jest przy lewym przbu
         self.T.discard(prevEdge)
 
         self.deleteFromTStructureAnim(prevEdge)
 
         if left.helper.type == 'M':
-            leftHelperD = self.polygonCopy.vertices[left.helper.id]
-            vD = self.polygonCopy.vertices[v.id]
-            self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, leftHelperD, second))
-
-            self.addDiagonalAnim(vD, leftHelperD)
+            self.D.addDiagDiv(v.id, left.helper.id)
+           
+            self.addDiagonalAnim(v, left.helper)
 
         self.removeAsHelperAnim(left.helper)
         left.helper = v
@@ -305,18 +285,19 @@ class Division:
         if v.type == 'RL': #intP po prawej    
             prevEdge = v.outgoingEdge.prev
             
-            if prevEdge.helper is not None and prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge nie zostal zakryty przekatna
-                prevEdgeHelperD = self.polygonCopy.vertices[prevEdge.helper.id]
-                vD = self.polygonCopy.vertices[v.id]                
-                self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, prevEdgeHelperD))
+            if prevEdge.helper is not None and prevEdge.helper.type == 'M': #prevEdge.helper is not None ROWNOZNACZNE Z: prevEdge nie zostal zakryty przekatna         
+                self.D.addDiagDiv(v.id, prevEdge.helper.id)
 
-                self.addDiagonalAnim(vD, prevEdgeHelperD)
+                self.addDiagonalAnim(v, prevEdge.helper)
 
             self.T.discard(prevEdge)
 
             self.deleteFromTStructureAnim(prevEdge)
 
             v.outgoingEdge.helper = v
+            
+            self.setAsHelperAnim(v)
+            
             self.T.add(v.outgoingEdge)
 
             self.addToTStructureAnim(v.outgoingEdge)
@@ -327,59 +308,56 @@ class Division:
             left = self.T[self.T.index(probe) - 1]
             self.T.discard(probe) #wyciagamy sonde
             if left.helper.type == 'M':
-                leftHelperD = self.polygonCopy.vertices[left.helper.id]
-                vD = self.polygonCopy.vertices[v.id]
-                self.addedDiags.add(self.polygonCopy.addDiagDiv(vD, leftHelperD))
+                self.D.addDiagDiv(v.id, left.helper.id)
 
-                self.addDiagonalAnim(vD, leftHelperD)
+                self.addDiagonalAnim(v, left.helper)
 
             self.removeAsHelperAnim(left.helper)
             left.helper = v
             self.setAsHelperAnim(v)
 
-    def createAdjacentFaces(self, diag, visited):
-        if not visited[diag]:
-            newface = Face()
-            diag.face = newface
-            visited[diag] = True
-            newface.outerEdge = diag
-            p = diag.next
-            while p != diag: 
-                p.face = newface
-                visited[p] = True
-                p = p.next
-            self.polygonCopy.faces.append(newface)
-        if not visited[diag.twin]:
-            newface = Face()
-            diagTwin = diag.twin
-            newface.outerEdge = diagTwin
-            diagTwin.face = newface
-            visited[diagTwin] = True
-            q = diagTwin.next
-            while q != diagTwin:
-                q.face = newface
-                visited[q] = True
-                q = q.next
-            self.polygonCopy.faces.append(newface)
-
     def updateFaces(self): 
         '''
-        Updating faces has to take place after the algorithm of division, because we cant afford time cost of such an operation during the algorithm.
-        updateFaces works similar to unconnected graph traversal. Polygon consists of unconnected cycles (faces). If we want to visit every edge, we have to start traversal at every diagonal and its twin.
-        Warning: we shouldn't start at non-diagonal, because if we did so, we would traverse whole initial polygon and every initial edge would have the same face.
-        Result: A polygon separated into faces. 
+        
         '''
-        if len(self.addedDiags) == 0:
-            return
-        self.polygonCopy.faces = [] #bo na razie miał jedną ścianę, ale zostanie ona usunięta, bo podzielono ją na kilka mniejszych.
-        visited = dict()
-        for diag in self.addedDiags:
-            visited[diag] = False
-            visited[diag.twin] = False
-        for diag in self.addedDiags:
-            if not visited[diag] or not visited[diag.twin]:
-                self.createAdjacentFaces(diag, visited)
+        faces = []
+        def cmp(v1ID, v2ID):
+            nonlocal i
+            v0 = self.polygon.vertices[i]
+            v1 = self.polygon.vertices[v1ID]
+            v2 = self.polygon.vertices[v2ID]
+            
+            dx1, dy1 = v1.x - v0.x, v1.y - v0.y
+            dx2, dy2 = v2.x - v0.x, v2.y - v0.y
 
+            angle1 = math.atan2(dy1, dx1)
+            angle2 = math.atan2(dy2, dx2)
+            return -1 if angle1 < angle2 else 1 if angle1 > angle2 else 0
+        
+        def prevIdx(curr, out):
+            idxOut = self.D.G[curr].index(out)
+
+            return (idxOut - 1)%len(self.D.G[curr])
+        visited = [[False for _ in range (len(self.D.G[i]))] for i in range (len(self.D.vertices))]
+
+        for i in range (len(self.D.vertices)):
+            self.D.G[i].sort(key = cmp_to_key(cmp))
+        for i in range (len(self.polygon.vertices) -1, -1, -1):
+            visited[i][self.D.G[i].index((i - 1)%len(self.polygon.vertices))] = True 
+        for i in range (len(self.D.G)):
+            for j in range (len(self.D.G[i])):
+                if visited[i][j]:
+                    continue
+                face = []
+                out = j
+                while not visited[i][out]:
+                    visited[i][out] = True
+                    face.append(self.polygon.vertices[i])
+                    adj = self.D.G[i][out] #przechodzimy do Vertex o id=adj
+                    best = prevIdx(adj, i) #poprzednik krawędzi adj->i (indeks)
+                    i, out = adj, best
+                faces.append(face)
+        return faces
     def divide(self):
         # narysuj wielokąt bez niczego na razie 
         points = list(map(lambda vertex: (vertex.x, vertex.y), self.polygon.vertices))
@@ -387,11 +365,12 @@ class Division:
         for i in range (len(points)):
             self.ax.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]], color = 'blue')
         #
-    
+
         mergeOrSplits = [p for i, p in enumerate(points) if self.polygon.vertices[i].type in ('M', 'S')]
-        X, Y = zip(*mergeOrSplits)
-        # plt.scatter(X,Y, color = 'red', s =40)
-        plt.scatter(X,Y, color = 'orange')
+        if len(mergeOrSplits) != 0:
+            X, Y = zip(*mergeOrSplits)
+            plt.scatter(X,Y, color = 'red', s =40)
+            # plt.scatter(X,Y, color = 'orange')
         points = [p for i, p in enumerate(points) if self.polygon.vertices[i].type not in ('M', 'S')]
         
         X, Y = zip(*points)
@@ -404,32 +383,28 @@ class Division:
             self.frame += 2
             self.anim.addAction(self.frame, lambda k = event.y: self.anim.addSweepLine(k, color = 'red'))
             self.frame += 2 
-            print(event.type)
             HalfEdge.currY = event.y
             func = handle[event.type]
             func(event)
         self.anim.addAction(self.frame, lambda: self.anim.deleteLine(self.anim.find_axhline_index('red')))
         self.frame += 2
-        self.updateFaces()
-        # self.anim.draw(75)
-        return self.polygonCopy
+        return self.updateFaces()
+       
 
     def visualize(self):
         fig, ax = plt.subplots()
-        xlim = (0,10)
-        ylim = (0,10)
-        ax.set_xlim(*xlim)
-        ax.set_ylim(*ylim)
         edgeSet = set()
-        for edge in self.polygonCopy.edges:
-            if edge not in edgeSet and edge.twin not in edgeSet:
-                edgeSet.add(edge)
-        pts = [(edge.origin, edge.twin.origin) for edge in edgeSet]
-        for pair in pts:
-            ax.plot((pair[0].x, pair[1].x), (pair[0].y, pair[1].y))
+        for i in range (len(self.D.vertices)):
+            for end in (self.D.G[i]):
+                edgeSet.add((self.polygon.vertices[i],(self.polygon.vertices[end])))
+        for pair in edgeSet:
+            ax.plot((pair[0].x, pair[1].x), (pair[0].y, pair[1].y), color = 'blue', linewidth = 1)
+        X,Y = [], []
+        for vert in self.polygon.vertices:
+            X.append(vert.x)
+            Y.append(vert.y)
+        plt.scatter(X,Y, color = 'orange')
         plt.show()
-
-
 
 class Triangulation:
     '''
@@ -438,11 +413,9 @@ class Triangulation:
     Pozostałe funkcje są pomocnicze.
     '''
 
-    def __init__(self, mesh, fig, ax, anim, frame ,currFace,eps = 10**(-12) ):
-        self.mesh = mesh
+    def __init__(self, fig, ax, anim, frame ,currFace,eps = 10**(-12) ):
         self.eps = eps
-        self.currFace = currFace
-        self.vertices = self.mesh.extractFaceVertices(currFace)
+        self.vertices = currFace
         self.points = list(map(lambda vertex: (vertex.x, vertex.y), self.vertices))
         self.left = [True]*(len(self.vertices))
         self.addedDiags = []
@@ -516,21 +489,18 @@ class Triangulation:
                     break
         return idxs
     
-    # def mergeBranches(self):
-    #     leftIdxs, rightIdxs = self.branches()
-    #     idxs = sorted(leftIdxs + rightIdxs, key = lambda idx: (-self.vertices[idx].y, self.vertices[idx].x))
-    #     return idxs
     def addToStackAnim(self,idx):
         self.anim.addAction(self.frame, lambda p1 = self.points[idx]: self.anim.addPoints([p1], color = 'green'))
         self.frame += 1
+
     def popFromStackAnim(self, idx):
         self.anim.addAction(self.frame, lambda p1 = self.points[idx]: self.anim.deletePoints(self.anim.find_scatter_index([p1])))
         self.frame += 1
+
     def algorithmTriangles(self):
         '''
         GŁÓWNY ALGORYTM TRIANGULACJI. Tworzy trójkąty i zapisuje je do listy w kolejności ccw.
         '''
-        
         N = len(self.vertices)
         self.branches()
         idxs = self.mergeBranches() #posortowana wzgledem y lista indeksów
@@ -613,13 +583,12 @@ def triangulate(points):
     '''
     prepare = Structures(points)
     division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
-    division.divide()
+    faces = division.divide()
     allTriangles = []
     prevframe = division.frame + 1
-    for face in division.polygonCopy.faces:
-        trian = Triangulation(division.polygonCopy, division.fig, division.ax, division.anim, prevframe, currFace=face)
+    for face in faces:
+        trian = Triangulation(division.fig, division.ax, division.anim, prevframe, currFace=face)
         if len(trian.vertices) == 3:
-            allTriangles += [(trian.vertices[0].id, trian.vertices[1].id, trian.vertices[2].id)]
             trian.anim.addAction(trian.frame, lambda p1 = trian.points[0], p2 = trian.points[1], p3 = trian.points[2]: trian.anim.addPoints([p1, p2, p3], color = 'red'))
             trian.frame += 1
             trian.anim.addAction(trian.frame, lambda p1 = trian.points[0], p2 = trian.points[1], p3 = trian.points[2]: trian.anim.addTriangleLines(p1,p2,p3, color = 'red'))
@@ -628,17 +597,39 @@ def triangulate(points):
             trian.frame += 1
         else:
             trian.algorithmTriangles()
-            #zamieniaj indeksy wewnetrzne algorytmu na indeksy globalne (id z Vertex) za pomocą listy trian.vertices gdzie indeks globalny dla i = trian.vertices[i].id 
-            allTriangles += list(map(lambda innerIdxTuple: tuple(map(lambda innerIdx: trian.vertices[innerIdx].id, innerIdxTuple)), trian.triangles))
         prevframe = trian.frame + 1
-    print(len(allTriangles)) 
-    division.anim.draw(150)
-    return allTriangles
+    division.anim.draw(150, False)
+
                 
+
+def choose_action():
+    print("Wybierz opcję:")
+    print("1. Wygeneruj figurę interaktywnie")
+    print("2. Wygeneruj losową figurę")
+    print("3. Wybierz z gotowych wielokątów w json")
+    choice = input("Wpisz 1 lub 2 lub 3: ").strip()
+
+    if choice == '1':
+        interactive_figure.graphing((0,10), (0,10))
+        plt.ioff()
+        time.sleep(1)
+        figure = loadFigure("exportData.json")
+        points = figure["points"]
+    elif choice == '2':
+        print("Generowanie losowej figury...")
+        points = generate_sun_like_figure.generate(5,10,10)
+    elif choice == '3':
+        file_name = str(input(("Podaj dokładną nazwę pliku: ")))
+        figure = loadFigure(file_name)
+        points = figure["points"]
+    else:
+        print("Nieprawidłowy wybór. Spróbuj ponownie.")
+        choose_action()
+    return points
+
+
 if __name__ == "__main__":
-    figure = loadFigure("exportData.json")
-    points = figure["points"]
-    points = generate_sun_like_figure.generate(5,10,10)
-    triangulate(points)
+    points = choose_action()
+    print(triangulate(points))
     
 

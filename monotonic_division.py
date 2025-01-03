@@ -11,7 +11,7 @@ import sys
 import time
 import math 
 
-sys.setrecursionlimit(10**7)
+
 
 #na razie zakladam ze nie bedzie punktow o rownych y, trzeba bedzie te jakies rotacje dorobic
 savefig = False
@@ -60,16 +60,15 @@ class Structures:
         mesh.edges.append(edge1)
         mesh.edges.append(edge2)
         ccwFace.append(edge1)
-        cwFace.append(edge2)
+    
         for i, edge in enumerate(mesh.edges):
             pt1,pt2 = edge.origin, edge.twin.origin
             edge.A = pt2.y - pt1.y
             edge.B = pt1.x - pt2.x
             edge.C = -(edge.A * pt1.x + edge.B * pt1.y)
         
-        
         mesh.addFace(ccwFace) #connect (prev, next) and add face
-        # mesh.addFace(cwFace)
+      
         return mesh
 
 
@@ -197,18 +196,9 @@ class Division:
     def __init__(self, polygon, events, sweep):
         self.polygon = polygon #mesh
         self.Q = events
-        self.D = Graph(deepcopy(self.polygon.vertices), [(self.polygon.vertices[i], self.polygon.vertices[(i + 1)%len(self.polygon.vertices)]) for i in range (len(self.polygon.vertices))])
+        self.D = Graph(self.polygon.vertices, [(self.polygon.vertices[i], self.polygon.vertices[(i + 1)%len(self.polygon.vertices)]) for i in range (len(self.polygon.vertices))])
+        # self.visualize()
         self.T = sweep
-        # self.addedDiags = set()
-        # self.polygonCopy = deepcopy(polygon)
-        # self.dictionary = self.initializeDict()
-    # def initializeDict(self):
-    #     d = dict()
-    #     for i,edge in enumerate(self.polygon.edges):
-    #         d[edge] = self.polygonCopy.edges[i] 
-    #     return d
-    # def originalToCopy(self, originalEdge):
-    #     return self.dictionary[originalEdge]
     
     def handleStartVertex(self, v):
         toAdd = v.outgoingEdge
@@ -257,38 +247,10 @@ class Division:
                 self.D.addDiagDiv(v.id, left.helper.id)
             left.helper = v
 
-    # def createAdjacentFaces(self, diag, visited):
-    #     if not visited[diag]:
-    #         newface = Face()
-    #         diag.face = newface
-    #         visited[diag] = True
-    #         newface.outerEdge = diag
-    #         p = diag.next
-    #         while p != diag: 
-    #             p.face = newface
-    #             visited[p] = True
-    #             p = p.next
-    #         self.polygonCopy.faces.append(newface)
-    #     if not visited[diag.twin]:
-    #         newface = Face()
-    #         diagTwin = diag.twin
-    #         newface.outerEdge = diagTwin
-    #         diagTwin.face = newface
-    #         visited[diagTwin] = True
-    #         q = diagTwin.next
-    #         while q != diagTwin:
-    #             q.face = newface
-    #             visited[q] = True
-    #             q = q.next
-    #         self.polygonCopy.faces.append(newface)
-
 
     def updateFaces(self): 
         '''
-        Updating faces has to take place after the algorithm of division, because we cant afford time cost of such an operation during the algorithm.
-        updateFaces works similar to unconnected graph traversal. Polygon consists of unconnected cycles (faces). If we want to visit every edge, we have to start traversal at every diagonal and its twin.
-        Warning: we shouldn't start at non-diagonal, because if we did so, we would traverse whole initial polygon and every initial edge would have the same face.
-        Result: A polygon separated into faces. 
+        
         '''
         faces = []
         def cmp(v1ID, v2ID):
@@ -328,41 +290,32 @@ class Division:
                     i, out = adj, best
                 faces.append(face)
         return faces
-    #     if len(self.addedDiags) == 0:
-    #         return
-    #     self.polygonCopy.faces = [] #bo na razie miał jedną ścianę, ale zostanie ona usunięta, bo podzielono ją na kilka mniejszych.
-    #     visited = dict()
-    #     for diag in self.addedDiags:
-    #         visited[diag] = False
-    #         visited[diag.twin] = False
-    #     for diag in self.addedDiags:
-    #         if not visited[diag] or not visited[diag.twin]:
-    #             self.createAdjacentFaces(diag, visited)
+   
 
     def divide(self):
         handle = {'M': self.handleMergeVertex, 'S': self.handleSplitVertex, 'I': self.handleStartVertex, 'RL': self.handleRegularVertex, 'RR': self.handleRegularVertex, 'E': self.handleEndVertex}
         while self.Q:
             event = self.Q.pop()
-            print(event.type)
+            # print(event.type)
             HalfEdge.currY = event.y
             func = handle[event.type]
             func(event)
-        faces = self.updateFaces()
-        return faces
+        return self.updateFaces()
+    
 
     def visualize(self):
         fig, ax = plt.subplots()
-        # xlim = (0,10)
-        # ylim = (0,10)
-        # ax.set_xlim(*xlim)
-        # ax.set_ylim(*ylim)
         edgeSet = set()
-        for edge in self.D.edges:
-            if edge not in edgeSet and edge.twin not in edgeSet:
-                edgeSet.add(edge)
-        pts = [(edge.origin, edge.twin.origin) for edge in edgeSet]
-        for pair in pts:
-            ax.plot((pair[0].x, pair[1].x), (pair[0].y, pair[1].y))
+        for i in range (len(self.D.vertices)):
+            for end in (self.D.G[i]):
+                edgeSet.add((self.polygon.vertices[i],(self.polygon.vertices[end])))
+        for pair in edgeSet:
+            ax.plot((pair[0].x, pair[1].x), (pair[0].y, pair[1].y), color = 'blue', linewidth = 1)
+        X,Y = [], []
+        for vert in self.polygon.vertices:
+            X.append(vert.x)
+            Y.append(vert.y)
+        plt.scatter(X,Y, color = 'orange')
         plt.show()
 
 
@@ -446,10 +399,6 @@ class Triangulation:
                     break
         return idxs
     
-    # def mergeBranches(self):
-    #     leftIdxs, rightIdxs = self.branches()
-    #     idxs = sorted(leftIdxs + rightIdxs, key = lambda idx: (-self.vertices[idx].y, self.vertices[idx].x))
-    #     return idxs
 
 
     def algorithm(self):
@@ -466,15 +415,13 @@ class Triangulation:
                 first = stack.pop()
                 u = stack.pop()
                 if abs(idxs[idx] - first) != N - 1 and abs(idxs[idx] - first) != 1:
-                    # self.addedDiags.append((idxs[idx], first))
                     self.addedDiags.append((self.vertices[idxs[idx]], self.vertices[first]))
-                    # self.updateMesh(idxs[idx], first)
+                    
                 while stack:
                     u,v = stack.pop(), u
                     if abs(idxs[idx] - v) != N - 1 and abs(idxs[idx] - v) != 1:  #żeby nie dodawał gdy to jest bok
-                        # self.addedDiags.append((idxs[idx], v))
                         self.addedDiags.append((self.vertices[idxs[idx]], self.vertices[v]))
-                        # self.updateMesh(idxs[idx], v)
+                        
                 stack.append(first)
                 stack.append(idxs[idx])
             else:
@@ -483,9 +430,7 @@ class Triangulation:
                 u = stack.pop() 
                 while self.inside(idxs[idx], v, u): 
                     if abs(idxs[idx] - u) != N - 1 and abs(idxs[idx] - u) != 1:
-                        # self.addedDiags.append((idxs[idx], u))
                         self.addedDiags.append((self.vertices[idxs[idx]], self.vertices[u]))
-                        # self.updateMesh(idxs[idx], u)
                     if not stack: #jesli skonczyl sie stack to nic nadmiarowego nie usunelismy
                         flag = True
                         break
@@ -509,8 +454,7 @@ class Triangulation:
         N = len(self.vertices)
         self.branches()
         idxs = self.mergeBranches() #posortowana wzgledem y lista indeksów
-        
-        
+    
         stack = [idxs[0], idxs[1]]
         for idx in range (2, N):
             if self.left[idxs[idx]] != self.left[stack[-1]]: #jeśli łańcuchy różne
@@ -542,10 +486,6 @@ class Triangulation:
 def visualize(mesh, addedDiags):
     fig, ax = plt.subplots()
     ax.clear()
-    # xlim = (0,10)
-    # ylim = (0,10)
-    # ax.set_xlim(*xlim)
-    # ax.set_ylim(*ylim)
     edgeSet = set()
     for edge in mesh.edges:
         if edge not in edgeSet and edge.twin not in edgeSet:
@@ -565,6 +505,7 @@ def triangulate(points):
     prepare = Structures(points)
     division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
     faces = division.divide()
+    # division.visualize()
     allTriangles = []
     for face in faces:
         trian = Triangulation(currFace=face)
@@ -575,67 +516,39 @@ def triangulate(points):
             trian.algorithmTriangles()
             #zamieniaj indeksy wewnetrzne algorytmu na indeksy globalne (id z Vertex) za pomocą listy trian.vertices gdzie indeks globalny dla i = trian.vertices[i].id 
             allTriangles += list(map(lambda innerIdxTuple: tuple(map(lambda innerIdx: trian.vertices[innerIdx].id, innerIdxTuple)), trian.triangles))
-    print(len(allTriangles)) 
+    # print(len(allTriangles)) 
     return allTriangles
                 
 
+def choose_action():
+    print("Wybierz opcję:")
+    print("1. Wygeneruj figurę interaktywnie")
+    print("2. Wygeneruj losową figurę")
+    print("3. Wybierz z gotowych wielokątów w json")
+    choice = input("Wpisz 1 lub 2 lub 3: ").strip()
+
+    if choice == '1':
+        interactive_figure.graphing((0,10), (0,10))
+        plt.ioff()
+        time.sleep(1)
+        figure = loadFigure("exportData.json")
+        points = figure["points"]
+    elif choice == '2':
+        print("Generowanie losowej figury...")
+        points = generate_sun_like_figure.generate(5,10,10)
+    elif choice == '3':
+        file_name = str(input(("Podaj dokładną nazwę pliku: ")))
+        figure = loadFigure(file_name)
+        points = figure["points"]
+    else:
+        print("Nieprawidłowy wybór. Spróbuj ponownie.")
+        choose_action()
+    return points
+
+
 if __name__ == "__main__":
-    # figure = loadFigure("mountains.json")
-    # points = figure["points"]
-    # X, Y = zip(*points)
-    # for i in range (len(points)):
-    #     plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
-    # plt.show()
-    
-    # prepare = Structures(points)
-    # division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
-    # division.divide()
-    # division.visualize()
-    # facesIdxToRemove = set()
-    # allDiags = []
-    # for i, face in enumerate(division.polygonCopy.faces[::]):
-    #     print(i, face)
-    #     trian = Triangulation(division.polygonCopy, currFace=face)
-    #     if len(trian.vertices) == 3:
-    #         continue
-    #     else:
-    #         trian.algorithm()
-    #         allDiags += trian.addedDiags
-    #         # division.polygon.faces.remove(face)
-    # # print(allDiags)
-
-    # visualize(division.polygonCopy, allDiags)
-    # figure = loadFigure("mountains.json")
-    # points = figure["points"]
-    # prepare = Structures(points)
-    # division = Division(prepare.prepareHalfEdgeMesh(), prepare.prepareEvents(), prepare.prepareSweep())
-    # faces = division.divide()
-    # # division.visualize()
-    # facesIdxToRemove = set()
-    # allDiags = []
-    # for i, face in faces:
-    #     print(i, face)
-    #     trian = Triangulation(division.polygonCopy, currFace=face)
-    #     if len(face) == 3:
-    #         continue
-    #     else:
-    #         trian.algorithm()
-    #         allDiags += trian.addedDiags
-    #         # division.polygon.faces.remove(face)
-    # # print(allDiags)
-
-
-    # figure = loadFigure("niedziala.json")
-    # points = figure["points"]
-    # X, Y = zip(*points)
-    # for i in range (len(points)):
-    #     plt.plot([X[i], X[(i + 1)%len(points)]], [Y[i], Y[(i + 1)%len(points)]])
-    # plt.show()
-    points = generate_sun_like_figure.generate(5,10,500)
-    start = time.time()
-    triangulate(points)
-    end = time.time()
-    print(end - start)
-    # draw_triangulation.draw(points, triangulate(points))
+    points = choose_action()
+    print(triangulate(points))
+    draw_triangulation.draw(points, triangulate(points))
 
 

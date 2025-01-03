@@ -21,11 +21,11 @@ class Animation:
     update jest funkcją używaną przez wywołanie animacji. Przekazując numer klatki, funkcja wykonuje
     zmiany zapisane w self.actions dla tej klatki, po czym zwraca zaktualizowane listy obiektów.
     '''
-    def __init__(self, fig, ax, setName):
+    def __init__(self, fig, ax, path):
         self.fig = fig
         self.ax = ax
         self.actions = {}
-        self.setName = setName
+        self.path = path
         self.animation = None  # Pole do przechowywania obiektu FuncAnimation
         self.is_running = True  # Flaga kontrolująca stan animacji
 
@@ -158,6 +158,6 @@ class Animation:
         if not saveGIF:
             plt.show(block = True)
         if saveGIF:
-            path = Path(__file__).parent/f"{self.setName}.gif" 
+            path = Path(self.path)
             self.animation.save(path, writer = 'pillow', fps = 1000/frameTime)
         
