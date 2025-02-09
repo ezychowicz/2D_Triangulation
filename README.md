@@ -12,11 +12,11 @@ This project presents a comparative implementation and analysis of two polygon t
 Implementation and algorithms details are described in documentation.
 
 ## Key features
-- Dual Triangulation Algorithms: Triangulate any simple polygon using either the Delaunay method or by decomposing it into monotonic polygons.
-- Performance Comparison: Evaluate both algorithms based on computational time and the quality of the triangulation.
-- Basic animation-maker with matplotlib.
-- Valid polygon generator.
-- Interactive Input.
+- **Two Triangulation Algorithms**: Triangulate any simple polygon using either the Delaunay method or by decomposing it into monotonic polygons.
+- **Performance Comparison**: Evaluate both algorithms based on computational time and the quality of the triangulation.
+- Basic **animation-maker** with matplotlib.
+- Valid **polygon generator**.
+- **Interactive Input**.
 
 ## Key files
 - delaunay.py – Implements the Delaunay triangulation algorithm.
@@ -24,5 +24,7 @@ Implementation and algorithms details are described in documentation.
 - animations.py – Contains the custom animation module for visualizing the triangulation process.
 
 
-
-
+## External libraries
+- sortedcontainers,
+- numpy,
+- matplotlib.
